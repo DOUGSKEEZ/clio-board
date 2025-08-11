@@ -1,0 +1,1 @@
+../../architecture/docs/samwise-storage-architecture.md

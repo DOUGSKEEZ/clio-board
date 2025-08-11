@@ -1,0 +1,1 @@
+../../architecture/docs/file_handling_rules.md

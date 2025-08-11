@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLIO Board - Task Management</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f6fa;
+            color: #2c3e50;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            color: #3498db;
+            margin: 0;
+        }
+        .status-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        .status-label {
+            font-weight: 600;
+        }
+        .status-value {
+            color: #27ae60;
+        }
+        .error {
+            color: #e74c3c;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 CLIO Board</h1>
+            <p>Personal Task Management System</p>
+        </div>
+
+        <div class="status-panel">
+            <h3>System Status</h3>
+            <div id="status-content" class="loading">
+                Loading system status...
+            </div>
+        </div>
+
+        <div class="status-panel">
+            <h3>API Information</h3>
+            <div id="api-content" class="loading">
+                Loading API information...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Test API connectivity
+        async function loadSystemStatus() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                
+                const statusContent = document.getElementById('status-content');
+                statusContent.innerHTML = `
+                    <div class="status-item">
+                        <span class="status-label">Status:</span>
+                        <span class="status-value ${data.status === 'healthy' ? '' : 'error'}">${data.status}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Database:</span>
+                        <span class="status-value">${data.database?.connected ? 'Connected' : 'Disconnected'}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Uptime:</span>
+                        <span class="status-value">${Math.round(data.uptime)} seconds</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Last Check:</span>
+                        <span class="status-value">${new Date(data.timestamp).toLocaleString()}</span>
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('status-content').innerHTML = `
+                    <div class="error">Failed to load system status: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function loadAPIInfo() {
+            try {
+                const response = await fetch('/api');
+                const data = await response.json();
+                
+                const apiContent = document.getElementById('api-content');
+                apiContent.innerHTML = `
+                    <div class="status-item">
+                        <span class="status-label">API Version:</span>
+                        <span class="status-value">${data.version}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Actor Type:</span>
+                        <span class="status-value">${data.actor}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Agent Mode:</span>
+                        <span class="status-value">${data.isAgent ? 'Yes' : 'No'}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Timestamp:</span>
+                        <span class="status-value">${new Date(data.timestamp).toLocaleString()}</span>
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('api-content').innerHTML = `
+                    <div class="error">Failed to load API info: ${error.message}</div>
+                `;
+            }
+        }
+
+        // Load data on page load
+        window.addEventListener('load', () => {
+            loadSystemStatus();
+            loadAPIInfo();
+            
+            // Refresh every 30 seconds
+            setInterval(() => {
+                loadSystemStatus();
+                loadAPIInfo();
+            }, 30000);
+        });
+    </script>
+</body>
+</html>

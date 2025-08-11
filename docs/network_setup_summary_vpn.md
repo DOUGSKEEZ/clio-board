@@ -1,0 +1,1 @@
+../../architecture/docs/network_setup_summary_vpn.md

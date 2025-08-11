@@ -1,0 +1,1 @@
+../../architecture/docs/clio-device-footprint.md
