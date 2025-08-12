@@ -50,6 +50,44 @@ router.get('/', async (req, res, next) => {
 
 /**
  * @swagger
+ * /api/tasks/archived:
+ *   get:
+ *     summary: Get all archived tasks
+ *     description: Returns all tasks that have been archived, with their list items if applicable
+ *     tags: [Tasks]
+ *     parameters:
+ *       - in: query
+ *         name: column
+ *         schema:
+ *           type: string
+ *           enum: [today, tomorrow, this_week, horizon]
+ *         description: Filter by column
+ *       - in: query
+ *         name: routine_id
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Filter by routine
+ *     responses:
+ *       200:
+ *         description: Array of archived tasks
+ */
+router.get('/archived', async (req, res, next) => {
+  try {
+    const filters = {
+      column: req.query.column,
+      routine_id: req.query.routine_id
+    };
+    
+    const archivedTasks = await taskService.getArchivedTasks(filters);
+    res.json(archivedTasks);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @swagger
  * /api/tasks/{id}:
  *   get:
  *     summary: Get a single task by ID
@@ -118,9 +156,6 @@ router.get('/:id', async (req, res, next) => {
  *               due_date:
  *                 type: string
  *                 format: date
- *               due_time:
- *                 type: string
- *                 format: time
  *     responses:
  *       201:
  *         description: Created task
@@ -131,7 +166,7 @@ router.post('/',
   createAuditMiddleware('create_task', 'task'),
   async (req, res, next) => {
     try {
-      const { title, notes, routine_id, column_name, due_date, due_time } = req.body;
+      const { title, notes, routine_id, column_name, due_date } = req.body;
       
       if (!title) {
         return res.status(400).json({ error: 'Title is required' });
@@ -142,8 +177,7 @@ router.post('/',
         notes,
         routine_id,
         column_name,
-        due_date,
-        due_time
+        due_date
       });
 
       // Audit log
@@ -191,9 +225,6 @@ router.post('/',
  *               due_date:
  *                 type: string
  *                 format: date
- *               due_time:
- *                 type: string
- *                 format: time
  *     responses:
  *       200:
  *         description: Updated task
@@ -322,6 +353,46 @@ router.put('/:id/archive',
       await req.audit(taskId, originalTask, archivedTask);
       
       res.json(archivedTask);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /api/tasks/{id}/restore:
+ *   put:
+ *     summary: Restore a task from archive
+ *     description: Restores an archived task back to active status
+ *     tags: [Tasks]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Restored task
+ *       404:
+ *         description: Task not found
+ */
+router.put('/:id/restore',
+  createAuditMiddleware('restore_task', 'task'),
+  async (req, res, next) => {
+    try {
+      const taskId = req.params.id;
+      
+      // Don't check if task exists first since getTaskById only finds active tasks
+      // The restoreTask method will handle task not found errors
+      const restoredTask = await taskService.restoreTask(taskId);
+      
+      // Audit log (use restored task as both original and new for audit)
+      await req.audit(taskId, restoredTask, restoredTask);
+      
+      res.json(restoredTask);
     } catch (error) {
       next(error);
     }

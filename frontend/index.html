@@ -4,155 +4,355 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CLIO Board - Task Management</title>
+    <!-- Debug version 5 -->
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- SortableJS for drag-and-drop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    
+    <!-- Custom styles -->
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #f5f6fa;
-            color: #2c3e50;
+        /* Custom scrollbar for webkit browsers */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
         }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
         }
-        .header {
-            text-align: center;
-            margin-bottom: 40px;
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
         }
-        .header h1 {
-            color: #3498db;
-            margin: 0;
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
         }
-        .status-panel {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
+
+        /* Smooth animations */
+        .card-transition {
+            transition: all 0.2s ease-in-out;
         }
-        .status-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #ecf0f1;
+        .card-transition:hover {
+            transform: translateY(-1px);
         }
-        .status-item:last-child {
-            border-bottom: none;
+
+        /* Board gradient background */
+        .board-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-        .status-label {
-            font-weight: 600;
+
+        /* Column shadows */
+        .column-shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
-        .status-value {
-            color: #27ae60;
+
+        /* Routine tag styles */
+        .routine-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
         }
-        .error {
-            color: #e74c3c;
+
+        /* Board layout fixes */
+        .board-columns {
+            display: flex !important;
+            gap: 1.5rem !important;
+            min-height: 400px;
         }
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #7f8c8d;
+        
+        .board-column {
+            flex: 1;
+            min-width: 280px;
+            max-width: 320px;
+        }
+
+        /* Mobile responsive board scroll */
+        @media (max-width: 768px) {
+            .board-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .board-columns {
+                min-width: 1200px; /* Force horizontal scroll */
+                width: max-content;
+            }
+            .board-column {
+                min-width: 280px;
+                flex-shrink: 0;
+            }
+        }
+
+        /* Drag and drop styles */
+        .sortable-ghost {
+            opacity: 0.5;
+        }
+        .sortable-chosen {
+            transform: rotate(3deg);
+        }
+        .sortable-drag {
+            opacity: 1;
+        }
+        /* Drop zone hover effect */
+        #today-tasks.sortable-drag-over,
+        #tomorrow-tasks.sortable-drag-over,
+        #week-tasks.sortable-drag-over,
+        #horizon-tasks.sortable-drag-over {
+            background-color: rgba(59, 130, 246, 0.1);
+            border: 2px dashed #3b82f6;
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🎯 CLIO Board</h1>
-            <p>Personal Task Management System</p>
-        </div>
-
-        <div class="status-panel">
-            <h3>System Status</h3>
-            <div id="status-content" class="loading">
-                Loading system status...
+<body class="bg-gray-100">
+    <!-- Minimal Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-2">
+                <div class="flex items-center space-x-2">
+                    <div class="text-xl">🎯</div>
+                    <h1 class="text-xl font-bold text-gray-900">CLIO Board</h1>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <!-- Archive Tab -->
+                    <button id="archive-tab-btn" class="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center space-x-1">
+                        <i class="fas fa-archive text-xs"></i>
+                        <span>Archive</span>
+                    </button>
+                    
+                    <!-- Settings Menu -->
+                    <button class="p-1 text-gray-400 hover:text-gray-600 transition-colors">
+                        <i class="fas fa-cog text-sm"></i>
+                    </button>
+                </div>
             </div>
         </div>
+    </header>
 
-        <div class="status-panel">
-            <h3>API Information</h3>
-            <div id="api-content" class="loading">
-                Loading API information...
+    <!-- Main Board -->
+    <main class="flex-1 p-4 board-bg min-h-screen">
+        <div class="max-w-7xl mx-auto">
+            <!-- Board Container -->
+            <div class="board-container">
+                <div id="board" class="board-columns flex gap-4 pb-6">
+                    <!-- Today Column -->
+                    <div class="board-column bg-gray-50 rounded-lg p-4 column-shadow" data-column="today">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-2">
+                                <h2 class="text-lg font-semibold text-gray-800">Today</h2>
+                                <span id="today-count" class="bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">0</span>
+                            </div>
+                            <button class="text-gray-400 hover:text-gray-600 transition-colors" data-column="today">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div id="today-tasks" class="space-y-3 min-h-[400px] p-2 rounded">
+                            <!-- Tasks will be loaded here dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Tomorrow Column -->
+                    <div class="board-column bg-gray-50 rounded-lg p-4 column-shadow" data-column="tomorrow">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-2">
+                                <h2 class="text-lg font-semibold text-gray-800">Tomorrow</h2>
+                                <span id="tomorrow-count" class="bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">0</span>
+                            </div>
+                            <button class="text-gray-400 hover:text-gray-600 transition-colors" data-column="tomorrow">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div id="tomorrow-tasks" class="space-y-3 min-h-[400px] p-2 rounded">
+                            <!-- Tasks will be loaded here dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- This Week Column -->
+                    <div class="board-column bg-gray-50 rounded-lg p-4 column-shadow" data-column="this_week">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-2">
+                                <h2 class="text-lg font-semibold text-gray-800">This Week</h2>
+                                <span id="week-count" class="bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">0</span>
+                            </div>
+                            <button class="text-gray-400 hover:text-gray-600 transition-colors" data-column="this_week">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div id="week-tasks" class="space-y-3 min-h-[400px] p-2 rounded">
+                            <!-- Tasks will be loaded here dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Horizon Column -->
+                    <div class="board-column bg-gray-50 rounded-lg p-4 column-shadow" data-column="horizon">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-2">
+                                <h2 class="text-lg font-semibold text-gray-800">On the Horizon</h2>
+                                <span id="horizon-count" class="bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">0</span>
+                            </div>
+                            <button class="text-gray-400 hover:text-gray-600 transition-colors" data-column="horizon">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div id="horizon-tasks" class="space-y-3 min-h-[400px] p-2 rounded">
+                            <!-- Tasks will be loaded here dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span class="text-gray-700">Loading tasks...</span>
+        </div>
+    </div>
+
+    <!-- Add Task Modal -->
+    <div id="add-task-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modal-title" class="text-lg font-semibold">Add New Task</h3>
+                <button id="close-modal-x" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="add-task-form">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                        <input type="text" id="task-title" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                        <textarea id="task-notes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                    <!-- Hidden column field - automatically set based on which + button was clicked -->
+                    <input type="hidden" id="task-column" value="today">
+                    
+                    <!-- Optional List Items -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-gray-700">
+                                <i class="fas fa-list mr-1"></i>List Items
+                            </label>
+                            <button type="button" id="add-list-item-btn" class="text-sm text-blue-600 hover:text-blue-700">
+                                <i class="fas fa-plus mr-1"></i>Add item
+                            </button>
+                        </div>
+                        <div id="list-items-container" class="space-y-2">
+                            <!-- List items will be added here dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center mt-6">
+                    <div class="flex items-center space-x-2 relative">
+                        <button type="button" id="due-date-btn" class="flex items-center space-x-1 px-2 py-1 text-sm text-gray-600 border border-gray-300 rounded-md hover:border-gray-400 hover:bg-gray-50">
+                            <i class="fas fa-calendar text-xs"></i>
+                            <span id="due-date-display">Set date</span>
+                        </button>
+                        <input type="date" id="task-due-date" class="absolute opacity-0 pointer-events-none" style="left: 0; top: 0;">
+                    </div>
+                    <div class="flex space-x-3">
+                        <button type="button" id="cancel-task-btn" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">Add Task</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Task Modal -->
+    <div id="edit-task-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="edit-modal-title" class="text-lg font-semibold">Edit Task</h3>
+                <button id="close-edit-modal-x" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="edit-task-form">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                        <input type="text" id="edit-task-title" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    
+                    <!-- Task Completion Checkbox -->
+                    <div class="flex items-center space-x-2">
+                        <button type="button" id="edit-task-complete-btn" class="w-5 h-5 rounded border-2 flex items-center justify-center hover:border-green-500 transition-all border-gray-300">
+                            <i class="fas fa-check text-white text-xs hidden" id="edit-complete-check"></i>
+                        </button>
+                        <label class="text-sm text-gray-700 cursor-pointer" id="edit-complete-label">Mark as completed</label>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                        <textarea id="edit-task-notes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                    
+                    <!-- List Items for editing -->
+                    <div id="edit-list-section">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-gray-700">
+                                <i class="fas fa-list mr-1"></i>List Items
+                            </label>
+                            <button type="button" id="edit-add-list-item-btn" class="text-sm text-blue-600 hover:text-blue-700">
+                                <i class="fas fa-plus mr-1"></i>Add item
+                            </button>
+                        </div>
+                        <div id="edit-list-items-container" class="space-y-2">
+                            <!-- Existing list items will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center mt-6">
+                    <div class="flex items-center space-x-2 relative">
+                        <button type="button" id="edit-due-date-btn" class="flex items-center space-x-1 px-2 py-1 text-sm text-gray-600 border border-gray-300 rounded-md hover:border-gray-400 hover:bg-gray-50">
+                            <i class="fas fa-calendar text-xs"></i>
+                            <span id="edit-due-date-display">Set date</span>
+                        </button>
+                        <input type="date" id="edit-task-due-date" class="absolute opacity-0 pointer-events-none" style="left: 0; top: 0;">
+                    </div>
+                    <div class="flex space-x-3">
+                        <button type="button" id="cancel-edit-btn" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">Save Changes</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Archive Modal -->
+    <div id="archive-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg w-full max-w-4xl mx-4 h-5/6 flex flex-col">
+            <div class="flex justify-between items-center p-6 border-b">
+                <h3 class="text-xl font-semibold">Archived Items</h3>
+                <button id="close-archive-modal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="flex-1 p-6 overflow-y-auto">
+                <div id="archived-tasks-container" class="space-y-3">
+                    <!-- Archived tasks will be loaded here -->
+                </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // Test API connectivity
-        async function loadSystemStatus() {
-            try {
-                const response = await fetch('/health');
-                const data = await response.json();
-                
-                const statusContent = document.getElementById('status-content');
-                statusContent.innerHTML = `
-                    <div class="status-item">
-                        <span class="status-label">Status:</span>
-                        <span class="status-value ${data.status === 'healthy' ? '' : 'error'}">${data.status}</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Database:</span>
-                        <span class="status-value">${data.database?.connected ? 'Connected' : 'Disconnected'}</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Uptime:</span>
-                        <span class="status-value">${Math.round(data.uptime)} seconds</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Last Check:</span>
-                        <span class="status-value">${new Date(data.timestamp).toLocaleString()}</span>
-                    </div>
-                `;
-            } catch (error) {
-                document.getElementById('status-content').innerHTML = `
-                    <div class="error">Failed to load system status: ${error.message}</div>
-                `;
-            }
-        }
-
-        async function loadAPIInfo() {
-            try {
-                const response = await fetch('/api');
-                const data = await response.json();
-                
-                const apiContent = document.getElementById('api-content');
-                apiContent.innerHTML = `
-                    <div class="status-item">
-                        <span class="status-label">API Version:</span>
-                        <span class="status-value">${data.version}</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Actor Type:</span>
-                        <span class="status-value">${data.actor}</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Agent Mode:</span>
-                        <span class="status-value">${data.isAgent ? 'Yes' : 'No'}</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Timestamp:</span>
-                        <span class="status-value">${new Date(data.timestamp).toLocaleString()}</span>
-                    </div>
-                `;
-            } catch (error) {
-                document.getElementById('api-content').innerHTML = `
-                    <div class="error">Failed to load API info: ${error.message}</div>
-                `;
-            }
-        }
-
-        // Load data on page load
-        window.addEventListener('load', () => {
-            loadSystemStatus();
-            loadAPIInfo();
-            
-            // Refresh every 30 seconds
-            setInterval(() => {
-                loadSystemStatus();
-                loadAPIInfo();
-            }, 30000);
-        });
-    </script>
+    <!-- JavaScript with cache busting -->
+    <script src="app.js?v=42"></script>
 </body>
 </html>

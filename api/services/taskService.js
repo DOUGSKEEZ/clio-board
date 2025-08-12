@@ -31,7 +31,7 @@ class TaskService {
                ) as items
         FROM tasks t
         LEFT JOIN routines r ON t.routine_id = r.id
-        WHERE t.status != 'archived'
+        WHERE t.is_archived = false
       `;
 
       const values = [];
@@ -53,6 +53,60 @@ class TaskService {
       return result.rows;
     } catch (error) {
       logger.error('Error fetching tasks', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Get archived tasks
+   * @param {Object} filters - Optional filters (column, routine_id)
+   * @returns {Array} Array of archived tasks with their items if type='list'
+   */
+  async getArchivedTasks(filters = {}) {
+    try {
+      let query = `
+        SELECT t.*, 
+               r.title as routine_title,
+               r.color as routine_color,
+               r.icon as routine_icon,
+               COALESCE(
+                 CASE WHEN t.type = 'list' THEN (
+                   SELECT json_agg(
+                     json_build_object(
+                       'id', li.id,
+                       'title', li.title,
+                       'completed', li.completed,
+                       'position', li.position
+                     ) ORDER BY li.position
+                   )
+                   FROM list_items li
+                   WHERE li.task_id = t.id
+                 ) END, '[]'::json
+               ) as items
+        FROM tasks t
+        LEFT JOIN routines r ON t.routine_id = r.id
+        WHERE t.is_archived = true
+      `;
+
+      const values = [];
+      let paramCount = 0;
+
+      if (filters.column) {
+        query += ` AND t.column_name = $${++paramCount}`;
+        values.push(filters.column);
+      }
+
+      if (filters.routine_id) {
+        query += ` AND t.routine_id = $${++paramCount}`;
+        values.push(filters.routine_id);
+      }
+
+      query += ' ORDER BY t.archived_at DESC';
+
+      const result = await pool.query(query, values);
+      return result.rows;
+    } catch (error) {
+      logger.error('Error fetching archived tasks', { error: error.message });
       throw error;
     }
   }
@@ -107,10 +161,10 @@ class TaskService {
       const query = `
         INSERT INTO tasks (
           id, routine_id, title, notes, type, status, 
-          due_date, due_time, position, column_name
+          due_date, position, column_name
         ) VALUES (
           $1, $2, $3, $4, 'task', 'pending', 
-          $5, $6, $7, $8
+          $5, $6, $7
         ) RETURNING *
       `;
 
@@ -123,7 +177,6 @@ class TaskService {
         taskData.title,
         taskData.notes || null,
         taskData.due_date || null,
-        taskData.due_time || null,
         position,
         taskData.column_name || 'today'
       ];
@@ -146,7 +199,7 @@ class TaskService {
   async updateTask(taskId, updates) {
     try {
       // Build dynamic UPDATE query
-      const allowedFields = ['title', 'notes', 'routine_id', 'due_date', 'due_time', 'column_name', 'position'];
+      const allowedFields = ['title', 'notes', 'routine_id', 'due_date', 'column_name', 'position', 'status', 'is_archived'];
       const setClause = [];
       const values = [];
       let paramCount = 1;
@@ -180,35 +233,26 @@ class TaskService {
   }
 
   /**
-   * Archive a task (preserves list items if type='list')
+   * Archive a task (list items are preserved automatically in list_items table)
    * @param {String} taskId - Task ID
    * @returns {Object} Archived task
    */
   async archiveTask(taskId) {
     try {
-      // Get task with items
-      const task = await this.getTaskById(taskId);
-      if (!task) {
-        throw new Error('Task not found');
-      }
-
-      let archivedItems = null;
-      if (task.type === 'list' && task.items && task.items.length > 0) {
-        // Preserve items as snapshot
-        archivedItems = JSON.stringify(task.items);
-      }
-
       const query = `
         UPDATE tasks
-        SET status = 'archived', 
-            archived_at = NOW(),
-            archived_items = $1
-        WHERE id = $2
+        SET is_archived = true, 
+            archived_at = NOW()
+        WHERE id = $1
         RETURNING *
       `;
 
-      const result = await pool.query(query, [archivedItems, taskId]);
-      logger.info('Task archived', { taskId, hadItems: !!archivedItems });
+      const result = await pool.query(query, [taskId]);
+      if (result.rows.length === 0) {
+        throw new Error('Task not found');
+      }
+      
+      logger.info('Task archived', { taskId });
       return result.rows[0];
     } catch (error) {
       logger.error('Error archiving task', { error: error.message, taskId });
@@ -217,13 +261,40 @@ class TaskService {
   }
 
   /**
-   * Complete a task (marks complete, then archives)
+   * Restore a task from archive
+   * @param {String} taskId - Task ID
+   * @returns {Object} Restored task
+   */
+  async restoreTask(taskId) {
+    try {
+      const query = `
+        UPDATE tasks
+        SET is_archived = false, 
+            archived_at = NULL
+        WHERE id = $1 AND is_archived = true
+        RETURNING *
+      `;
+
+      const result = await pool.query(query, [taskId]);
+      if (result.rows.length === 0) {
+        throw new Error('Task not found or not archived');
+      }
+      
+      logger.info('Task restored', { taskId });
+      return result.rows[0];
+    } catch (error) {
+      logger.error('Error restoring task', { error: error.message, taskId });
+      throw error;
+    }
+  }
+
+  /**
+   * Complete a task (marks complete, stays visible)
    * @param {String} taskId - Task ID
    * @returns {Object} Completed task
    */
   async completeTask(taskId) {
     try {
-      // First mark as completed
       const completeQuery = `
         UPDATE tasks
         SET status = 'completed', 
@@ -232,12 +303,9 @@ class TaskService {
         RETURNING *
       `;
 
-      await pool.query(completeQuery, [taskId]);
-      
-      // Then archive it
-      const archivedTask = await this.archiveTask(taskId);
-      logger.info('Task completed and archived', { taskId });
-      return archivedTask;
+      const result = await pool.query(completeQuery, [taskId]);
+      logger.info('Task completed', { taskId });
+      return result.rows[0];
     } catch (error) {
       logger.error('Error completing task', { error: error.message, taskId });
       throw error;
@@ -429,7 +497,7 @@ class TaskService {
     const query = `
       SELECT COALESCE(MAX(position), 0) + 1 as next_position
       FROM tasks
-      WHERE column_name = $1 AND status != 'archived'
+      WHERE column_name = $1 AND is_archived = false
     `;
     const result = await pool.query(query, [column]);
     return result.rows[0].next_position;

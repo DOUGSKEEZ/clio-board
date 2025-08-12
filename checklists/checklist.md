@@ -18,7 +18,7 @@
 - [x] PUT /api/tasks/:id/archive - Archive task
 - [x] POST /api/tasks/:id/complete - Mark complete
 - [x] PUT /api/tasks/:id/move - Move task between columns
-- [x] Due date and time support (due_date, due_time fields)
+- [x] Due date (due_date field)
 
 ## List Items (Implicit Type Management) ✨ CORE INNOVATION
 - [x] Implement implicit task/list conversion logic in TaskService
@@ -80,16 +80,46 @@
 - [x] Due date/time support fully functional
 - [x] Implicit type conversion: task ↔ list (CORE INNOVATION)
 
-## Phase 2: Frontend Kanban Board  
-- [ ] Create 4-column board layout (Today/Tomorrow/Week/Horizon)
-- [ ] Task card component (title, notes, routine tag)
-- [ ] List card variant (with collapsible items)
-- [ ] Basic drag-and-drop between columns
+## Phase 2: Frontend Kanban Board 🚧 PARTIALLY COMPLETE
 
-## Phase 3: Polish & Enhancement
+### ✅ Basic Board Infrastructure
+- [x] Create 4-column board layout (Today/Tomorrow/Week/Horizon)
+- [x] Basic task card component (title, due date, routine tag)
+- [x] List card variant (with expand/collapse functionality)
+- [x] Drag-and-drop between columns (SortableJS integration)
+- [x] Add Task modals with column-specific creation
+- [x] Click-to-edit functionality for existing tasks/lists
+- [x] Auto-expanding list item fields for rapid creation
+- [x] List item deletion with proper error handling
+- [x] Space optimization (removed notes from cards, tighter spacing)
+- [x] CSP configuration for external CDN resources
+- [x] Compact list view - "Grocery List (5 items)" collapsed state (we already have this)
+
+### ❌ MISSING CORE FEATURES (Requirements Gap)
+- [x] **Task completion checkboxes** on cards (like Trello) ✨ JUST COMPLETED!
+- [ ] **Task states**: Pending → Completed → Archived with visual indicators
+- [ ] **Archive functionality** in UI (API exists, no UI)
+- [ ] **Restore functionality** in UI (API exists, no UI)
+- [ ] **Routine management** - create/edit routines, pause/complete/archive
+- [ ] **Mini-board modal** - click routine tag → see all tasks for that routine
+- [ ] **Archive view** - see completed/archived tasks
+- [ ] **List item reordering** - drag to reorder items within lists
+
+## Phase 2.5: Note Board Module 📋 PLANNED
+- [ ] **Note Board** - 4-column scratch area (MAJOR MISSING MODULE - implement before Phase 3)
+
+## Phase 3: Polish & Enhancement 📋 PLANNED
 - [ ] Add agent rate limiting (express-rate-limit ~10 lines)
-- [ ] Note board (4 columns for user/agent notes)
-- [ ] Routine management view
-- [ ] Archive view for completed tasks
+- [ ] Remove orphan task indicators from dashboard (space saving)
 - [ ] Mobile responsive design
-- [ ] WebSocket real-time updates (Phase 4)
+- [ ] Further UI space optimization
+- [ ] Performance optimizations
+- [ ] Additional UX improvements
+
+## Phase 4: Advanced Features 🔮 FUTURE
+- [ ] WebSocket real-time updates 
+- [ ] Analytics dashboard
+- [ ] Search functionality (archived tasks only)
+- [ ] Undo/redo system
+- [ ] Backup/export functionality
+- [ ] Keyboard shortcuts

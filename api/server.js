@@ -23,9 +23,49 @@ const notesRouter = require('./routes/notes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security middleware
+// Security middleware - CSP configured for Samwise development
 app.use(helmet({
   crossOriginEmbedderPolicy: false, // Allow embedding for development
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'self'", "http://192.168.10.21:3000"],
+      scriptSrc: [
+        "'self'", 
+        "'unsafe-inline'",
+        "http://192.168.10.21:3000",
+        "https://cdn.tailwindcss.com",
+        "https://cdn.jsdelivr.net", 
+        "https://kit.fontawesome.com"
+      ],
+      styleSrc: [
+        "'self'", 
+        "'unsafe-inline'",
+        "http://192.168.10.21:3000",
+        "https://cdn.tailwindcss.com",
+        "https://cdn.jsdelivr.net",
+        "https://cdnjs.cloudflare.com",
+        "https://kit.fontawesome.com",
+        "https://ka-f.fontawesome.com"
+      ],
+      fontSrc: [
+        "'self'",
+        "http://192.168.10.21:3000", 
+        "https://cdnjs.cloudflare.com",
+        "https://ka-f.fontawesome.com",
+        "https://fonts.gstatic.com"
+      ],
+      connectSrc: [
+        "'self'",
+        "http://192.168.10.21:3000",
+        "https://ka-f.fontawesome.com"
+      ],
+      imgSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"]
+    }
+  }
 }));
 
 // CORS configuration
