@@ -113,17 +113,32 @@
     </style>
 </head>
 <body class="bg-gray-100">
-    <!-- Minimal Header -->
+    <!-- Header with Tab Navigation -->
     <header class="bg-white shadow-sm border-b border-gray-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center py-2">
-                <div class="flex items-center space-x-2">
-                    <div class="text-xl">🎯</div>
-                    <h1 class="text-xl font-bold text-gray-900">CLIO Board</h1>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2">
+                        <div class="text-xl">🎯</div>
+                        <h1 class="text-xl font-bold text-gray-900">CLIO Board</h1>
+                    </div>
+                    
+                    <!-- Main Navigation Tabs -->
+                    <div class="flex items-center space-x-1 ml-8">
+                        <button id="tasks-tab" class="nav-tab px-3 py-1 text-sm font-medium text-blue-600 bg-blue-50 rounded transition-colors" data-view="tasks">
+                            Tasks
+                        </button>
+                        <button id="routines-tab" class="nav-tab px-3 py-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors" data-view="routines">
+                            Routines
+                        </button>
+                        <button id="notes-tab" class="nav-tab px-3 py-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors" data-view="notes">
+                            Notes
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="flex items-center space-x-4">
-                    <!-- Archive Tab -->
+                    <!-- Archive Tab (separate from main nav) -->
                     <button id="archive-tab-btn" class="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center space-x-1">
                         <i class="fas fa-archive text-xs"></i>
                         <span>Archive</span>
@@ -138,12 +153,25 @@
         </div>
     </header>
 
-    <!-- Main Board -->
+    <!-- Main Content Area -->
     <main class="flex-1 p-4 board-bg min-h-screen">
         <div class="max-w-7xl mx-auto">
-            <!-- Board Container -->
-            <div class="board-container">
-                <div id="board" class="board-columns flex gap-4 pb-6">
+            <!-- Breadcrumb Navigation (initially hidden) -->
+            <div id="breadcrumb" class="hidden mb-4">
+                <nav class="flex text-sm">
+                    <button id="breadcrumb-back" class="text-white hover:text-gray-200 flex items-center space-x-1">
+                        <i class="fas fa-arrow-left"></i>
+                        <span>Back to Routines</span>
+                    </button>
+                    <span class="text-white mx-2">/</span>
+                    <span id="breadcrumb-title" class="text-white font-medium"></span>
+                </nav>
+            </div>
+            
+            <!-- Tasks View (default) -->
+            <div id="tasks-view" class="view-container">
+                <div class="board-container">
+                    <div id="board" class="board-columns flex gap-4 pb-6">
                     <!-- Today Column -->
                     <div class="board-column bg-gray-50 rounded-lg p-4 column-shadow" data-column="today">
                         <div class="flex items-center justify-between mb-4">
@@ -206,6 +234,55 @@
                         <div id="horizon-tasks" class="space-y-3 min-h-[400px] p-2 rounded">
                             <!-- Tasks will be loaded here dynamically -->
                         </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+            </div>
+            
+            <!-- Routines View (hidden by default) -->
+            <div id="routines-view" class="view-container hidden">
+                <div class="mb-6 flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-white">Manage Routines</h2>
+                    <button id="add-routine-btn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors flex items-center space-x-2">
+                        <i class="fas fa-plus"></i>
+                        <span>New Routine</span>
+                    </button>
+                </div>
+                <div id="routines-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Routine cards will be loaded here -->
+                </div>
+            </div>
+            
+            <!-- Routine Detail View (hidden by default) -->
+            <div id="routine-detail-view" class="view-container hidden">
+                <div id="routine-mini-board" class="board-columns flex gap-4 pb-6">
+                    <!-- Mini board for specific routine will be loaded here -->
+                </div>
+            </div>
+            
+            <!-- Notes View (hidden by default) -->
+            <div id="notes-view" class="view-container hidden">
+                <div class="mb-6">
+                    <h2 class="text-2xl font-bold text-white">Notes Board</h2>
+                </div>
+                <div id="notes-board" class="flex gap-4">
+                    <!-- 4 columns for notes -->
+                    <div class="flex-1 bg-gray-50 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-3">Column 1</h3>
+                        <div id="notes-col-1" class="space-y-3 min-h-[400px]"></div>
+                    </div>
+                    <div class="flex-1 bg-gray-50 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-3">Column 2</h3>
+                        <div id="notes-col-2" class="space-y-3 min-h-[400px]"></div>
+                    </div>
+                    <div class="flex-1 bg-gray-50 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-3">Column 3</h3>
+                        <div id="notes-col-3" class="space-y-3 min-h-[400px]"></div>
+                    </div>
+                    <div class="flex-1 bg-gray-50 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-3">Column 4</h3>
+                        <div id="notes-col-4" class="space-y-3 min-h-[400px]"></div>
                     </div>
                 </div>
             </div>
@@ -352,7 +429,124 @@
         </div>
     </div>
 
+    <!-- Add/Edit Routine Modal -->
+    <div id="routine-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <!-- Header -->
+            <div class="flex justify-between items-center p-6 border-b">
+                <h3 id="routine-modal-title" class="text-lg font-semibold">Create New Routine</h3>
+                <button id="close-routine-modal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Content area with scroll -->
+            <div class="flex-1 overflow-y-auto p-6">
+                <form id="routine-form">
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                                <input type="text" id="routine-name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                <input type="text" id="routine-description" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-12 gap-3">
+                            <div class="col-span-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Color</label>
+                                <div class="flex items-center space-x-2 p-3 border border-gray-300 rounded-md bg-white">
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-blue-400" data-color="blue" data-bg-class="bg-blue-100" title="Blue"></div>
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-green-400" data-color="green" data-bg-class="bg-green-100" title="Green"></div>
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-purple-400" data-color="purple" data-bg-class="bg-purple-100" title="Purple"></div>
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-orange-400" data-color="orange" data-bg-class="bg-orange-100" title="Orange"></div>
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-red-400" data-color="red" data-bg-class="bg-red-100" title="Red"></div>
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-yellow-400" data-color="yellow" data-bg-class="bg-yellow-100" title="Yellow"></div>
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-pink-400" data-color="pink" data-bg-class="bg-pink-100" title="Pink"></div>
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-gray-400" data-color="gray" data-bg-class="bg-gray-100" title="Gray"></div>
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-indigo-400" data-color="indigo" data-bg-class="bg-indigo-100" title="Indigo"></div>
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-teal-400" data-color="teal" data-bg-class="bg-teal-100" title="Teal"></div>
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-lime-400" data-color="lime" data-bg-class="bg-lime-100" title="Lime"></div>
+                                    <div class="color-swatch w-6 h-6 rounded-full cursor-pointer border-2 transition-all bg-rose-400" data-color="rose" data-bg-class="bg-rose-100" title="Rose"></div>
+                                </div>
+                                <input type="hidden" id="routine-color" value="blue">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Icon</label>
+                                <div class="relative">
+                                    <input type="text" id="routine-icon" class="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-lg pr-8" placeholder="⭐" maxlength="2" style="font-family: 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;">
+                                    <button type="button" id="emoji-picker-btn" class="absolute right-1 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm p-1">
+                                        🔘
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                <button type="button" id="pause-toggle-btn" class="px-5 py-3 border border-gray-300 rounded-md text-sm font-medium transition-colors bg-green-50 text-green-700 hover:bg-green-100">
+                                    ▶️ Active
+                                </button>
+                                <input type="hidden" id="routine-paused" value="false">
+                                <input type="hidden" id="routine-pause-until" value="">
+                            </div>
+                            <div id="pause-until-container" class="col-span-2 hidden -ml-6">
+                                <label class="block text-sm font-small text-gray-700 mb-1">Paused until</label>
+                                <input type="date" id="pause-until-date" class="px-2 py-3 border border-gray-300 rounded-md text-sm">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                
+                <!-- Tasks and Notes section (only shown when editing) -->
+                <div id="routine-items-section" class="hidden mt-8">
+                    <div class="grid grid-cols-2 gap-6">
+                        <!-- Tasks belonging to this routine -->
+                        <div>
+                            <h4 class="text-md font-semibold text-gray-800 mb-3 flex items-center justify-between">
+                                <span><i class="fas fa-tasks mr-2"></i>Tasks</span>
+                                <span id="routine-tasks-count" class="text-sm text-gray-500"></span>
+                            </h4>
+                            <div id="routine-tasks-list" class="space-y-2 max-h-80 overflow-y-auto border rounded-lg p-3 bg-gray-50">
+                                <!-- Tasks will be loaded here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Notes belonging to this routine -->
+                        <div>
+                            <h4 class="text-md font-semibold text-gray-800 mb-3 flex items-center justify-between">
+                                <span><i class="fas fa-sticky-note mr-2"></i>Notes</span>
+                                <span id="routine-notes-count" class="text-sm text-gray-500"></span>
+                            </h4>
+                            <div id="routine-notes-list" class="space-y-2 max-h-80 overflow-y-auto border rounded-lg p-3 bg-gray-50">
+                                <!-- Notes will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="flex justify-between items-center p-6 border-t">
+                <div class="flex items-center">
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" id="routine-achievable" class="rounded w-5 h-5">
+                        <span class="text-sm font-medium text-gray-700">Achievable</span>
+                    </label>
+                </div>
+                <div class="flex space-x-3">
+                    <button type="button" id="cancel-routine-btn" class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" form="routine-form" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                        Save Routine
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript with cache busting -->
-    <script src="app.js?v=42"></script>
+    <script src="app.js?v=80"></script>
 </body>
 </html>

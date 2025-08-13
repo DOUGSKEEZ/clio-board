@@ -148,7 +148,7 @@ class RoutineService {
    */
   async updateRoutine(routineId, updates) {
     try {
-      const allowedFields = ['title', 'description', 'color', 'icon', 'type', 'status', 'achievable'];
+      const allowedFields = ['title', 'description', 'color', 'icon', 'type', 'status', 'achievable', 'pause_until'];
       const setClause = [];
       const values = [];
       let paramCount = 1;

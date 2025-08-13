@@ -16,6 +16,8 @@
 - [x] POST /api/tasks - Create new task  
 - [x] PUT /api/tasks/:id - Update task
 - [x] PUT /api/tasks/:id/archive - Archive task
+- [x] GET /api/tasks/archived - Get all archived tasks
+- [x] PUT /api/tasks/:id/restore - Restore archived task
 - [x] POST /api/tasks/:id/complete - Mark complete
 - [x] PUT /api/tasks/:id/move - Move task between columns
 - [x] Due date (due_date field)
@@ -80,7 +82,7 @@
 - [x] Due date/time support fully functional
 - [x] Implicit type conversion: task ↔ list (CORE INNOVATION)
 
-## Phase 2: Frontend Kanban Board 🚧 PARTIALLY COMPLETE
+## Phase 2: Frontend Kanban Board 🚧 85% COMPLETE
 
 ### ✅ Basic Board Infrastructure
 - [x] Create 4-column board layout (Today/Tomorrow/Week/Horizon)
@@ -93,16 +95,22 @@
 - [x] List item deletion with proper error handling
 - [x] Space optimization (removed notes from cards, tighter spacing)
 - [x] CSP configuration for external CDN resources
-- [x] Compact list view - "Grocery List (5 items)" collapsed state (we already have this)
+- [x] Compact list view - "Grocery List (5 items)" collapsed state
+- [x] Three-dot menu system for task actions (prevents accidental archives)
+- [x] ESC key and click-outside to close all modals
+- [x] Blue hover outline on task cards for better UX
 
-### ❌ MISSING CORE FEATURES (Requirements Gap)
-- [x] **Task completion checkboxes** on cards (like Trello) ✨ JUST COMPLETED!
-- [ ] **Task states**: Pending → Completed → Archived with visual indicators
-- [ ] **Archive functionality** in UI (API exists, no UI)
-- [ ] **Restore functionality** in UI (API exists, no UI)
+### ✅ COMPLETED CORE FEATURES
+- [x] **Task completion checkboxes** on cards (Trello-style hover-to-show)
+- [x] **Task states**: Separated completion (pending/completed) from archive state
+- [x] **Archive functionality** in UI with three-dot dropdown menu
+- [x] **Restore functionality** in Archive tab with instant board refresh
+- [x] **Archive view** - dedicated modal for viewing/restoring archived tasks
+- [x] **Database refactoring** - separated is_archived from status field
+- [x] **Real-time UI updates** - board refreshes after archive/restore operations
+### 📋 REMAINING PHASE 2 FEATURES
 - [ ] **Routine management** - create/edit routines, pause/complete/archive
 - [ ] **Mini-board modal** - click routine tag → see all tasks for that routine
-- [ ] **Archive view** - see completed/archived tasks
 - [ ] **List item reordering** - drag to reorder items within lists
 
 ## Phase 2.5: Note Board Module 📋 PLANNED
