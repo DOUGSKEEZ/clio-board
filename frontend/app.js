@@ -161,12 +161,13 @@ class ClioBoardApp {
 
     createTaskCard(task) {
         const div = document.createElement('div');
-        div.className = 'task-card bg-white rounded-lg p-2 shadow-sm card-transition cursor-pointer border border-gray-200 hover:border-blue-400 hover:border-2 hover:shadow-md group';
-        div.setAttribute('data-task-id', task.id);
-        div.setAttribute('data-task-type', task.type);
-        
         const routineInfo = task.routine_id ? 
             this.routines.find(r => r.id === task.routine_id) : null;
+        const isPaused = routineInfo && routineInfo.status === 'paused';
+        
+        div.className = `task-card ${isPaused ? 'bg-gray-200 opacity-90' : 'bg-white'} rounded-lg p-2 shadow-sm card-transition cursor-pointer border border-gray-200 hover:border-blue-400 hover:border-2 hover:shadow-md group`;
+        div.setAttribute('data-task-id', task.id);
+        div.setAttribute('data-task-type', task.type);
         
         const dueDate = task.due_date ? 
             new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
@@ -177,22 +178,25 @@ class ClioBoardApp {
                     <button class="task-complete-btn absolute left-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-all duration-200 hover:border-green-500 hover:shadow-sm ${task.status === 'completed' ? 'opacity-100 bg-green-500 border-green-500' : 'opacity-0 group-hover:opacity-100 border-gray-300'}" data-task-id="${task.id}">
                         ${task.status === 'completed' ? '<i class="fas fa-check text-white text-xs"></i>' : ''}
                     </button>
-                    <h3 class="text-sm font-medium leading-snug flex-1 transition-all duration-200 ${task.status === 'completed' ? 'text-gray-500 line-through ml-6' : 'text-gray-900 group-hover:ml-6'}">${this.escapeHtml(task.title)}</h3>
+                    <h3 class="text-sm font-medium leading-snug flex-1 transition-all duration-200 ${task.status === 'completed' ? 'text-gray-500 line-through ml-6' : isPaused ? 'text-gray-500 group-hover:ml-6' : 'text-gray-900 group-hover:ml-6'}">${this.escapeHtml(task.title)}</h3>
                 </div>
-                <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all relative">
-                    <button class="task-menu-btn text-gray-400 hover:text-gray-600 transition-all p-1 -m-1 rounded" data-task-id="${task.id}">
-                        <i class="fas fa-ellipsis-h text-sm"></i>
-                    </button>
-                    <div class="task-menu absolute -left-10 bottom-3 mb-1 bg-white border border-gray-200 rounded-md shadow-lg z-[200] min-w-[80px] hidden">
-                        <button class="archive-task-btn w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2" data-task-id="${task.id}">
-                            <i class="fas fa-archive text-xs"></i>
-                            <span>Archive</span>
+                <div class="flex items-center space-x-1">
+                    <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all relative">
+                        <button class="task-menu-btn text-gray-400 hover:text-gray-600 transition-all p-1 -m-1 rounded" data-task-id="${task.id}">
+                            <i class="fas fa-ellipsis-h text-sm"></i>
                         </button>
+                        <div class="task-menu absolute -left-10 bottom-3 mb-1 bg-white border border-gray-200 rounded-md shadow-lg z-[200] min-w-[80px] hidden">
+                            <button class="archive-task-btn w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2" data-task-id="${task.id}">
+                                <i class="fas fa-archive text-xs"></i>
+                                <span>Archive</span>
+                            </button>
+                        </div>
                     </div>
+                    ${isPaused ? '<span class="text-gray-500 text-xs ml-1">▐▐</span>' : ''}
                 </div>
             </div>
             
-            ${task.type === 'list' && task.items && task.items.length > 0 ? this.renderListItems(task.items, task) : ''}
+            ${task.type === 'list' && task.items && task.items.length > 0 ? this.renderListItems(task.items, task, isPaused) : ''}
             
             <div class="flex items-center justify-between mt-2">
                 ${this.renderRoutineTag(routineInfo)}
@@ -300,7 +304,7 @@ class ClioBoardApp {
         return div;
     }
 
-    renderListItems(items, task) {
+    renderListItems(items, task, isPaused = false) {
         if (!items || items.length === 0) return '';
         
         const visibleItems = items.slice(0, 4);
@@ -310,20 +314,22 @@ class ClioBoardApp {
         const visibleItemsHtml = visibleItems.map(item => `
             <div class="flex items-center space-x-2 text-xs">
                 <input type="checkbox" ${item.completed ? 'checked' : ''} 
-                       class="w-3 h-3 text-green-600 list-item-checkbox" 
+                       class="w-3 h-3 text-green-600 list-item-checkbox ${isPaused ? 'opacity-40' : ''}" 
+                       ${isPaused ? 'style="accent-color: #d1d5db; background-color: #d1d5db !important; -webkit-appearance: none; appearance: none; border: 1px solid #9ca3af; border-radius: 3px;"' : ''}
                        data-task-id="${task.id}"
                        data-item-id="${item.id}">
-                <span class="${item.completed ? 'line-through text-gray-500' : 'text-gray-700'}">${this.escapeHtml(item.title)}</span>
+                <span class="${item.completed ? 'line-through text-gray-500' : isPaused ? 'text-gray-500' : 'text-gray-700'}">${this.escapeHtml(item.title)}</span>
             </div>
         `).join('');
         
         const hiddenItemsHtml = hiddenItems.map(item => `
             <div class="flex items-center space-x-2 text-xs">
                 <input type="checkbox" ${item.completed ? 'checked' : ''} 
-                       class="w-3 h-3 text-green-600 list-item-checkbox" 
+                       class="w-3 h-3 text-green-600 list-item-checkbox ${isPaused ? 'opacity-40' : ''}" 
+                       ${isPaused ? 'style="accent-color: #d1d5db; background-color: #d1d5db !important; -webkit-appearance: none; appearance: none; border: 1px solid #9ca3af; border-radius: 3px;"' : ''}
                        data-task-id="${task.id}"
                        data-item-id="${item.id}">
-                <span class="${item.completed ? 'line-through text-gray-500' : 'text-gray-700'}">${this.escapeHtml(item.title)}</span>
+                <span class="${item.completed ? 'line-through text-gray-500' : isPaused ? 'text-gray-500' : 'text-gray-700'}">${this.escapeHtml(item.title)}</span>
             </div>
         `).join('');
         
@@ -344,7 +350,7 @@ class ClioBoardApp {
         ` : '';
         
         return `
-            <div class="list-items space-y-1 mb-2 p-2 bg-gray-50 rounded" data-list-container="${task.id}">
+            <div class="list-items space-y-1 mb-2 p-2 ${isPaused ? 'bg-gray-100 opacity-75' : 'bg-gray-50'} rounded" data-list-container="${task.id}">
                 <div class="visible-items">
                     ${visibleItemsHtml}
                 </div>
@@ -369,6 +375,16 @@ class ClioBoardApp {
     renderRoutineTag(routine) {
         if (!routine) {
             return `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">☐ No routine</span>`;
+        }
+        
+        const isPaused = routine.status === 'paused';
+        
+        if (isPaused) {
+            return `
+                <span class="routine-tag text-gray-600 bg-gray-100 opacity-80">
+                    ${routine.icon} ${this.escapeHtml(routine.title)}
+                </span>
+            `;
         }
         
         return `
@@ -659,13 +675,7 @@ class ClioBoardApp {
             }
         });
         
-        // Routine management event listeners
-        const addRoutineBtn = document.getElementById('add-routine-btn');
-        if (addRoutineBtn) {
-            addRoutineBtn.addEventListener('click', () => {
-                this.openRoutineModal();
-            });
-        }
+        // Routine management event listeners (add card is now created dynamically)
         
         const routineForm = document.getElementById('routine-form');
         if (routineForm) {
@@ -727,6 +737,22 @@ class ClioBoardApp {
         if (pauseUntilDate) {
             pauseUntilDate.addEventListener('change', (e) => {
                 document.getElementById('routine-pause-until').value = e.target.value;
+            });
+        }
+        
+        // Achievable checkbox - show/hide completed checkbox
+        const achievableCheckbox = document.getElementById('routine-achievable');
+        if (achievableCheckbox) {
+            achievableCheckbox.addEventListener('change', () => {
+                this.toggleCompletedVisibility();
+            });
+        }
+        
+        // Completed checkbox - override status controls
+        const completedCheckbox = document.getElementById('routine-completed');
+        if (completedCheckbox) {
+            completedCheckbox.addEventListener('change', () => {
+                this.handleCompletedToggle();
             });
         }
     }
@@ -803,6 +829,7 @@ class ClioBoardApp {
             // Refresh archive view
             await this.loadArchivedTasks();
             this.renderArchivedTasks();
+            this.updateArchiveCounts();
             
             // Refresh main board to show the restored task
             await this.loadTasks();
@@ -813,9 +840,51 @@ class ClioBoardApp {
         }
     }
 
+    async handleRoutineRestore(routineId) {
+        try {
+            console.log(`📤 Restoring routine ${routineId}`);
+            
+            const response = await this.apiCall(`/api/routines/${routineId}/restore`, {
+                method: 'PUT'
+            });
+            
+            console.log('✅ Routine restore successful:', response);
+            
+            // Refresh archive view
+            await Promise.all([
+                this.loadArchivedTasks(),
+                this.loadArchivedRoutines()
+            ]);
+            this.renderArchivedItems();
+            this.updateArchiveCounts();
+            
+            // Refresh routines view if we're currently viewing it
+            if (this.currentView === 'routines') {
+                await this.loadRoutines();
+                this.loadRoutinesView();
+            }
+            
+            // Refresh main board to show restored routine tasks
+            await this.loadTasks();
+            this.renderBoard();
+        } catch (error) {
+            console.error('❌ Failed to restore routine:', error);
+            console.error('❌ Error details:', error.message);
+            console.error('❌ Full error object:', error);
+            this.showError(`Failed to restore routine: ${error.message}`);
+        }
+    }
+
     async loadArchivedTasks() {
         this.archivedTasks = await this.apiCall('/api/tasks/archived');
         console.log('📋 loadArchivedTasks() complete, received', this.archivedTasks.length, 'archived tasks');
+    }
+
+    async loadArchivedRoutines() {
+        console.log('📡 loadArchivedRoutines() called, making API call...');
+        this.archivedRoutines = await this.apiCall('/api/routines/archived');
+        console.log('📋 loadArchivedRoutines() complete, received', this.archivedRoutines.length, 'archived routines');
+        console.log('📋 Archived routines data:', this.archivedRoutines);
     }
 
     // Modal Management
@@ -849,6 +918,9 @@ class ClioBoardApp {
             };
             modalTitle.innerHTML = `Add Task - <strong>${columnNames[defaultColumn] || 'Today'}</strong>`;
         }
+        
+        // Load routine options
+        this.populateRoutineDropdown('task-routine');
         
         modal.classList.remove('hidden');
         document.getElementById('task-title').focus();
@@ -945,6 +1017,46 @@ class ClioBoardApp {
         return inputs[currentIndex + 1] || null;
     }
 
+    async populateRoutineDropdown(selectElementId, selectedRoutineId = null) {
+        try {
+            const select = document.getElementById(selectElementId);
+            if (!select) return;
+            
+            // Clear existing options except "No routine"
+            select.innerHTML = '<option value="">No routine</option>';
+            
+            // Get active and paused routines (exclude completed and archived)
+            const routines = await this.apiCall('/api/routines');
+            const availableRoutines = routines.filter(routine => 
+                !routine.is_archived && 
+                (routine.status === 'active' || routine.status === 'paused')
+            );
+            
+            availableRoutines.forEach(routine => {
+                const option = document.createElement('option');
+                option.value = routine.id;
+                
+                // Create option text with icon and name
+                const icon = routine.icon || '⭐';
+                option.textContent = `${icon} ${routine.title}`;
+                
+                // Set style for the option (though this is limited in select elements)
+                if (routine.color && routine.color.startsWith('#')) {
+                    option.style.color = routine.color;
+                }
+                
+                // Mark as selected if this is the current routine
+                if (selectedRoutineId && routine.id === selectedRoutineId) {
+                    option.selected = true;
+                }
+                
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading routines for dropdown:', error);
+        }
+    }
+
     closeAddTaskModal() {
         const modal = document.getElementById('add-task-modal');
         modal.classList.add('hidden');
@@ -1015,6 +1127,9 @@ class ClioBoardApp {
         // Load list items if it's a list
         this.loadEditListItems(task);
         
+        // Load routine options and set current selection
+        this.populateRoutineDropdown('edit-task-routine', task.routine_id);
+        
         modal.classList.remove('hidden');
         document.getElementById('edit-task-title').focus();
     }
@@ -1029,17 +1144,101 @@ class ClioBoardApp {
         this.editingTask = null;
     }
 
-    openArchiveModal() {
+    async openArchiveModal() {
         const modal = document.getElementById('archive-modal');
         modal.classList.remove('hidden');
-        this.loadArchivedTasks().then(() => {
-            this.renderArchivedTasks();
-        });
+        
+        // Load both archived tasks and routines
+        await Promise.all([
+            this.loadArchivedTasks(),
+            this.loadArchivedRoutines()
+        ]);
+        
+        // Initialize tabs and render content
+        this.initializeArchiveTabs();
+        this.renderArchivedItems();
+        this.updateArchiveCounts();
     }
 
     closeArchiveModal() {
         const modal = document.getElementById('archive-modal');
         modal.classList.add('hidden');
+    }
+
+    initializeArchiveTabs() {
+        // Add event listeners to archive tabs
+        document.querySelectorAll('.archive-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const view = e.currentTarget.dataset.archiveView;
+                this.switchArchiveTab(view);
+            });
+        });
+        
+        // Set default active tab (tasks)
+        this.switchArchiveTab('tasks');
+    }
+
+    switchArchiveTab(view) {
+        // Update tab active states
+        document.querySelectorAll('.archive-tab').forEach(tab => {
+            const isActive = tab.dataset.archiveView === view;
+            if (isActive) {
+                tab.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+                tab.classList.add('border-blue-500', 'text-blue-600');
+                // Update count badge color for active tab
+                const countBadge = tab.querySelector('span');
+                if (countBadge) {
+                    countBadge.classList.remove('bg-gray-100', 'text-gray-800');
+                    countBadge.classList.add('bg-blue-100', 'text-blue-800');
+                }
+            } else {
+                tab.classList.remove('border-blue-500', 'text-blue-600');
+                tab.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+                // Update count badge color for inactive tab
+                const countBadge = tab.querySelector('span');
+                if (countBadge) {
+                    countBadge.classList.remove('bg-blue-100', 'text-blue-800');
+                    countBadge.classList.add('bg-gray-100', 'text-gray-800');
+                }
+            }
+        });
+
+        // Show/hide tab content
+        document.querySelectorAll('.archive-tab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+        document.getElementById(`archive-${view}-content`).classList.remove('hidden');
+    }
+
+    updateArchiveCounts() {
+        // Update count badges
+        const tasksCount = this.archivedTasks ? this.archivedTasks.length : 0;
+        const routinesCount = this.archivedRoutines ? this.archivedRoutines.length : 0;
+        
+        document.getElementById('archive-tasks-count').textContent = tasksCount;
+        document.getElementById('archive-routines-count').textContent = routinesCount;
+        document.getElementById('archive-notes-count').textContent = 0; // TODO: Update when notes are implemented
+    }
+
+    renderArchivedItems() {
+        this.renderArchivedRoutines();
+        this.renderArchivedTasks();
+    }
+
+    renderArchivedRoutines() {
+        const container = document.getElementById('archived-routines-container');
+        
+        if (!this.archivedRoutines || this.archivedRoutines.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-8">No archived routines</p>';
+            return;
+        }
+
+        container.innerHTML = '';
+        
+        this.archivedRoutines.forEach(routine => {
+            const routineElement = this.createArchivedRoutineCard(routine);
+            container.appendChild(routineElement);
+        });
     }
 
     renderArchivedTasks() {
@@ -1056,6 +1255,48 @@ class ClioBoardApp {
             const taskElement = this.createArchivedTaskCard(task);
             container.appendChild(taskElement);
         });
+    }
+
+    createArchivedRoutineCard(routine) {
+        const div = document.createElement('div');
+        div.className = 'bg-gray-50 rounded-lg p-3 border border-gray-200';
+        
+        const archivedDate = new Date(routine.archived_at).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric',
+            year: 'numeric'
+        });
+        
+        div.innerHTML = `
+            <div class="flex items-start justify-between mb-2">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <span class="text-lg">${routine.icon || '⭐'}</span>
+                        <h3 class="text-sm font-medium text-gray-900">${this.escapeHtml(routine.title || routine.name)}</h3>
+                    </div>
+                    ${routine.description ? `<p class="text-xs text-gray-600 mb-2">${this.escapeHtml(routine.description)}</p>` : ''}
+                    <div class="flex items-center space-x-2 text-xs text-gray-500">
+                        <span>Archived ${archivedDate}</span>
+                        <span>•</span>
+                        <span>${(parseInt(routine.pending_tasks || 0) + parseInt(routine.completed_tasks || 0))} tasks</span>
+                        ${routine.achievable ? '<span>• Achievable</span>' : ''}
+                    </div>
+                </div>
+                <button class="restore-routine-btn text-blue-600 hover:text-blue-800 transition-colors" data-routine-id="${routine.id}" title="Restore routine">
+                    <i class="fas fa-undo text-sm"></i>
+                </button>
+            </div>
+        `;
+        
+        // Add restore button handler
+        const restoreBtn = div.querySelector('.restore-routine-btn');
+        if (restoreBtn) {
+            restoreBtn.addEventListener('click', () => {
+                this.handleRoutineRestore(routine.id);
+            });
+        }
+        
+        return div;
     }
 
     createArchivedTaskCard(task) {
@@ -1216,7 +1457,8 @@ class ClioBoardApp {
         const taskData = {
             title: document.getElementById('edit-task-title').value,
             notes: document.getElementById('edit-task-notes').value,
-            due_date: document.getElementById('edit-task-due-date').value || null
+            due_date: document.getElementById('edit-task-due-date').value || null,
+            routine_id: document.getElementById('edit-task-routine').value || null
         };
         
         try {
@@ -1303,7 +1545,8 @@ class ClioBoardApp {
             title: document.getElementById('task-title').value,
             notes: document.getElementById('task-notes').value,
             column_name: document.getElementById('task-column').value,
-            due_date: document.getElementById('task-due-date').value || null
+            due_date: document.getElementById('task-due-date').value || null,
+            routine_id: document.getElementById('task-routine').value || null
         };
         
         try {
@@ -1428,17 +1671,126 @@ class ClioBoardApp {
     async loadRoutinesView() {
         console.log('Loading routines view');
         const container = document.getElementById('routines-grid');
+        
+        // Clear all cards
         container.innerHTML = '';
         
-        this.routines.forEach(routine => {
-            const card = this.createRoutineCard(routine);
-            container.appendChild(card);
+        // Create a container specifically for sortable routine cards
+        const sortableContainer = document.createElement('div');
+        sortableContainer.id = 'sortable-routines';
+        sortableContainer.className = 'contents'; // CSS grid passthrough
+        
+        // Sort routines by display_order if available, otherwise by creation date (oldest first)
+        const sortedRoutines = [...this.routines].sort((a, b) => {
+            // If both have display_order, sort by that
+            if (a.display_order !== null && b.display_order !== null) {
+                return a.display_order - b.display_order;
+            }
+            // If only one has display_order, it comes first
+            if (a.display_order !== null) return -1;
+            if (b.display_order !== null) return 1;
+            // Otherwise sort by creation date (oldest first)
+            return new Date(a.created_at) - new Date(b.created_at);
         });
+        
+        // Add routine cards to the sortable container
+        sortedRoutines.forEach(routine => {
+            const card = this.createRoutineCard(routine);
+            sortableContainer.appendChild(card);
+        });
+        
+        // Add the sortable container to the main grid
+        container.appendChild(sortableContainer);
+        
+        // Add "Add New Routine" card at the end (outside sortable area)
+        const addCard = document.createElement('div');
+        addCard.id = 'add-routine-card';
+        addCard.className = 'bg-transparent border-2 border-dashed border-white border-opacity-60 rounded-lg p-4 hover:border-gray-300 hover:bg-gray-200 hover:bg-opacity-20 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center text-white text-opacity-80 hover:text-gray-300 min-h-[140px]';
+        addCard.innerHTML = `
+            <i class="fas fa-plus text-3xl mb-2"></i>
+            <span class="text-sm font-medium">Add New Routine</span>
+        `;
+        
+        // Add click handler for the add card
+        addCard.addEventListener('click', () => {
+            this.openRoutineModal();
+        });
+        
+        container.appendChild(addCard);
+        
+        // Initialize drag-and-drop for routine cards only
+        this.initializeRoutineDragAndDrop();
+    }
+    
+    initializeRoutineDragAndDrop() {
+        const sortableContainer = document.getElementById('sortable-routines');
+        if (!sortableContainer) return;
+        
+        // Destroy existing sortable if it exists
+        if (this.routineSortable) {
+            this.routineSortable.destroy();
+        }
+        
+        this.routineSortable = Sortable.create(sortableContainer, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            onEnd: (evt) => this.handleRoutineReorder(evt)
+        });
+    }
+    
+    async handleRoutineReorder(evt) {
+        // Get current order of routine cards from the sortable container only
+        const sortableContainer = document.getElementById('sortable-routines');
+        const routineCards = sortableContainer.querySelectorAll('.routine-card');
+        const newOrder = [];
+        
+        routineCards.forEach((card, index) => {
+            const routineId = card.getAttribute('data-routine-id');
+            if (routineId) {
+                newOrder.push({ id: routineId, order: index });
+            }
+        });
+        
+        try {
+            // Update the order in the backend
+            await this.apiCall('/api/routines/reorder', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order: newOrder })
+            });
+            
+            // Update local routines array to match new order
+            await this.loadRoutines();
+        } catch (error) {
+            console.error('Failed to reorder routines:', error);
+            // Reload the view to revert the change
+            this.loadRoutinesView();
+        }
     }
     
     createRoutineCard(routine) {
         const div = document.createElement('div');
-        div.className = 'bg-white rounded-lg p-4 shadow hover:shadow-lg transition-shadow cursor-pointer';
+        const isPaused = routine.status === 'paused';
+        const isCompleted = routine.status === 'completed';
+        
+        // Determine card styling based on status
+        let cardClasses = 'routine-card rounded-lg p-4 shadow transition-all duration-200 cursor-pointer border-2';
+        
+        if (isCompleted) {
+            // Celebratory styling for completed routines
+            cardClasses += ' bg-gradient-to-br from-green-50 to-blue-50 border-green-300 hover:border-green-400 hover:shadow-lg';
+        } else if (isPaused) {
+            // Muted styling for paused routines
+            cardClasses += ' bg-gray-50 opacity-75 border-transparent hover:border-blue-400 hover:shadow-lg';
+        } else {
+            // Normal styling for active routines
+            cardClasses += ' bg-white border-transparent hover:border-blue-400 hover:shadow-lg';
+        }
+        
+        div.className = cardClasses;
+        div.setAttribute('data-routine-id', routine.id);
         
         const colorMap = {
             blue: 'bg-blue-100 text-blue-700',
@@ -1483,14 +1835,11 @@ class ClioBoardApp {
                     <span class="text-2xl">${routine.icon || icon}</span>
                     <h3 class="text-lg font-semibold">${this.escapeHtml(routine.title || routine.name)}</h3>
                 </div>
-                <div class="flex items-center space-x-2">
-                    <button class="edit-routine-btn text-gray-400 hover:text-gray-600 p-1" data-routine-id="${routine.id}">
-                        <i class="fas fa-edit text-sm"></i>
-                    </button>
-                    <button class="routine-menu-btn text-gray-400 hover:text-gray-600 p-1 relative" data-routine-id="${routine.id}">
+                <div class="relative">
+                    <button class="routine-menu-btn text-gray-400 hover:text-gray-600 p-1" data-routine-id="${routine.id}">
                         <i class="fas fa-ellipsis-h text-sm"></i>
                     </button>
-                    <div class="routine-menu absolute right-0 top-8 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[150px] hidden">
+                    <div class="routine-menu absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[150px] hidden">
                         ${!routine.paused_until ? 
                             `<button class="pause-routine-btn w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" data-routine-id="${routine.id}">
                                 <i class="fas fa-pause text-xs mr-2"></i>Pause
@@ -1514,13 +1863,16 @@ class ClioBoardApp {
                     </div>
                 </div>
             </div>
-            ${routine.description ? `<p class="text-gray-600 text-sm mb-3">${this.escapeHtml(routine.description)}</p>` : ''}
-            <div class="flex items-center justify-between">
+            <p class="text-gray-600 text-sm mb-3 truncate min-h-[1.25rem]">${routine.description ? this.escapeHtml(routine.description) : ''}</p>
+            <div class="relative flex items-center justify-between">
                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colorClass}">
                     ${(parseInt(routine.pending_tasks || 0) + parseInt(routine.completed_tasks || 0))} tasks
                 </span>
-                ${routine.achievable ? '<span class="text-xs text-gray-500">Achievable</span>' : ''}
-                ${routine.status === 'paused' ? '<span class="text-xs text-orange-500">Paused</span>' : ''}
+                ${routine.achievable ? '<div class="absolute left-1/2 transform -translate-x-1/2"><span class="text-xs text-gray-500">Achievable</span></div>' : ''}
+                <div class="text-right">
+                    ${routine.status === 'paused' ? '<span class="text-xs text-gray-500">▐▐ <strong> PAUSED</strong></span>' : ''}
+                    ${routine.status === 'completed' ? '<span class="text-xs text-green-600 font-medium">🎉 <strong>COMPLETED</strong></span>' : ''}
+                </div>
             </div>
         `;
         
@@ -1530,15 +1882,6 @@ class ClioBoardApp {
                 this.openRoutineModal(routine);
             }
         });
-        
-        // Add edit button handler
-        const editBtn = div.querySelector('.edit-routine-btn');
-        if (editBtn) {
-            editBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.openRoutineModal(routine);
-            });
-        }
         
         // Add menu button handler
         const menuBtn = div.querySelector('.routine-menu-btn');
@@ -1649,6 +1992,21 @@ class ClioBoardApp {
             
             document.getElementById('routine-achievable').checked = routine.achievable || false;
             
+            // Set completion state and visibility
+            const isCompleted = routine.status === 'completed';
+            const completedContainer = document.getElementById('routine-completed-container');
+            const completedCheckbox = document.getElementById('routine-completed');
+            
+            if (routine.achievable) {
+                // Show completed checkbox if routine is achievable
+                completedContainer.classList.remove('hidden');
+                completedCheckbox.checked = isCompleted;
+            } else {
+                // Hide completed checkbox if not achievable
+                completedContainer.classList.add('hidden');
+                completedCheckbox.checked = false;
+            }
+            
             // Set pause state - check if routine status is paused
             const isPausedStatus = routine.status === 'paused';
             const pauseToggleBtn = document.getElementById('pause-toggle-btn');
@@ -1677,6 +2035,13 @@ class ClioBoardApp {
                 pauseUntilContainer.classList.add('hidden');
                 routinePausedInput.value = 'false';
                 routinePauseUntilInput.value = '';
+            }
+            
+            // Override status controls if routine is completed
+            if (isCompleted) {
+                this.setStatusControlsEnabled(false);
+            } else {
+                this.setStatusControlsEnabled(true);
             }
             
             this.editingRoutine = routine;
@@ -1881,6 +2246,7 @@ class ClioBoardApp {
         
         const isPaused = document.getElementById('routine-paused').value === 'true';
         const pauseUntil = document.getElementById('routine-pause-until').value;
+        const isCompleted = document.getElementById('routine-completed').checked;
         
         const routineData = {
             title: document.getElementById('routine-name').value,  // API expects 'title' not 'name'
@@ -1888,7 +2254,7 @@ class ClioBoardApp {
             color: document.getElementById('routine-color').value,
             icon: document.getElementById('routine-icon').value,
             achievable: document.getElementById('routine-achievable').checked,
-            status: isPaused ? 'paused' : 'active',
+            status: isCompleted ? 'completed' : (isPaused ? 'paused' : 'active'),
             pause_until: isPaused ? (pauseUntil || null) : null
         };
         
@@ -1912,6 +2278,11 @@ class ClioBoardApp {
             // Reload routines
             await this.loadRoutines();
             this.loadRoutinesView();
+            
+            // Reload tasks to reflect pause status changes on task board
+            await this.loadTasks();
+            this.renderBoard();
+            
             this.closeRoutineModal();
         } catch (error) {
             console.error('Failed to save routine:', error);
@@ -1981,6 +2352,52 @@ class ClioBoardApp {
             } else {
                 routinePauseUntilInput.value = pauseUntilDate.value;
             }
+        }
+    }
+    
+    toggleCompletedVisibility() {
+        const achievableCheckbox = document.getElementById('routine-achievable');
+        const completedContainer = document.getElementById('routine-completed-container');
+        const completedCheckbox = document.getElementById('routine-completed');
+        
+        if (achievableCheckbox.checked) {
+            // Show completed checkbox when achievable is checked
+            completedContainer.classList.remove('hidden');
+        } else {
+            // Hide completed checkbox and uncheck it when achievable is unchecked
+            completedContainer.classList.add('hidden');
+            completedCheckbox.checked = false;
+            // Also re-enable status controls if they were disabled
+            this.setStatusControlsEnabled(true);
+        }
+    }
+    
+    handleCompletedToggle() {
+        const completedCheckbox = document.getElementById('routine-completed');
+        
+        if (completedCheckbox.checked) {
+            // Disable status controls when marked as completed
+            this.setStatusControlsEnabled(false);
+        } else {
+            // Re-enable status controls when unchecked
+            this.setStatusControlsEnabled(true);
+        }
+    }
+    
+    setStatusControlsEnabled(enabled) {
+        const pauseToggleBtn = document.getElementById('pause-toggle-btn');
+        const pauseUntilContainer = document.getElementById('pause-until-container');
+        
+        if (enabled) {
+            pauseToggleBtn.disabled = false;
+            pauseToggleBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            pauseToggleBtn.classList.add('hover:bg-green-100');
+        } else {
+            pauseToggleBtn.disabled = true;
+            pauseToggleBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            pauseToggleBtn.classList.remove('hover:bg-green-100');
+            // Hide pause until container when disabled
+            pauseUntilContainer.classList.add('hidden');
         }
     }
     

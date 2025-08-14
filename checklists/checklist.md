@@ -108,9 +108,17 @@
 - [x] **Archive view** - dedicated modal for viewing/restoring archived tasks
 - [x] **Database refactoring** - separated is_archived from status field
 - [x] **Real-time UI updates** - board refreshes after archive/restore operations
+### ✅ ROUTINE MANAGEMENT SYSTEM 
+- [x] **Routine management** - create/edit routines with color/icon picker
+- [x] **Routine completion system** - achievable routines can be marked complete with celebratory styling
+- [x] **Routine pause/resume** - pause with optional resume date, visual indicators
+- [x] **Archive consistency** - unified is_archived boolean pattern across all entities
+- [x] **Task-routine assignment** - basic dropdown selection in Add/Edit Task modals
+- [x] **Routine card reordering** - drag-and-drop functionality with backend persistence
+- [x] **Mini-board modal** - click routine tag → see all tasks for that routine
+
 ### 📋 REMAINING PHASE 2 FEATURES
-- [ ] **Routine management** - create/edit routines, pause/complete/archive
-- [ ] **Mini-board modal** - click routine tag → see all tasks for that routine
+- [ ] **Enhanced routine picker** - Trello-style dropdown with search, color-coded cards (replacing basic HTML select)
 - [ ] **List item reordering** - drag to reorder items within lists
 
 ## Phase 2.5: Note Board Module 📋 PLANNED

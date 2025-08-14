@@ -76,6 +76,26 @@ router.get('/', async (req, res, next) => {
 
 /**
  * @swagger
+ * /api/notes/archived:
+ *   get:
+ *     summary: Get all archived notes
+ *     description: Returns all notes that have been archived
+ *     tags: [Notes]
+ *     responses:
+ *       200:
+ *         description: Array of archived notes
+ */
+router.get('/archived', async (req, res, next) => {
+  try {
+    const archivedNotes = await noteService.getArchivedNotes();
+    res.json(archivedNotes);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @swagger
  * /api/notes/{id}:
  *   get:
  *     summary: Get a single note by ID

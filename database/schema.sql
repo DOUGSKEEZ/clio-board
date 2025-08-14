@@ -9,17 +9,18 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 1. Routines Table (Projects/Recurring containers)
+-- 1. Routines Table (Containers for related tasks)
 CREATE TABLE routines (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title VARCHAR(255) NOT NULL,
     description TEXT,
     color VARCHAR(7) DEFAULT '#3498db', -- Hex color for UI
     icon VARCHAR(50) DEFAULT '📌', -- Emoji icon
-    type VARCHAR(20) CHECK (type IN ('project', 'recurring')) DEFAULT 'project',
-    status VARCHAR(20) CHECK (status IN ('active', 'paused', 'completed', 'archived')) DEFAULT 'active',
+    status VARCHAR(20) CHECK (status IN ('active', 'paused', 'completed')) DEFAULT 'active',
     achievable BOOLEAN DEFAULT false, -- Can be marked complete when all tasks done
     pause_until TIMESTAMP NULL, -- When paused routines resume
+    is_archived BOOLEAN DEFAULT false, -- Archive state (separate from operational status)
+    display_order INTEGER DEFAULT 0, -- Custom display order for drag-and-drop
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     archived_at TIMESTAMP NULL

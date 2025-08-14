@@ -18,12 +18,6 @@ const { logger } = require('../middleware/logger');
  *           type: string
  *           enum: [active, paused, completed]
  *         description: Filter by status
- *       - in: query
- *         name: type
- *         schema:
- *           type: string
- *           enum: [project, recurring]
- *         description: Filter by type
  *     responses:
  *       200:
  *         description: Array of routines
@@ -38,11 +32,37 @@ router.get('/', async (req, res, next) => {
   try {
     const filters = {
       status: req.query.status,
-      type: req.query.type
+      archived: false  // Default: only show non-archived routines
     };
     
     const routines = await routineService.getRoutines(filters);
     res.json(routines);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/routines/archived:
+ *   get:
+ *     summary: Get all archived routines
+ *     description: Returns all routines that have been archived, with task counts
+ *     tags: [Routines]
+ *     responses:
+ *       200:
+ *         description: Array of archived routines
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Routine'
+ */
+router.get('/archived', async (req, res, next) => {
+  try {
+    const archivedRoutines = await routineService.getRoutines({ archived: true });
+    res.json(archivedRoutines);
   } catch (error) {
     next(error);
   }
@@ -134,7 +154,6 @@ router.get('/:id/tasks', async (req, res, next) => {
  *             type: object
  *             required:
  *               - title
- *               - type
  *             properties:
  *               title:
  *                 type: string
@@ -142,10 +161,6 @@ router.get('/:id/tasks', async (req, res, next) => {
  *               description:
  *                 type: string
  *                 description: Routine description
- *               type:
- *                 type: string
- *                 enum: [project, recurring]
- *                 description: Routine type
  *               color:
  *                 type: string
  *                 pattern: '^#[0-9A-Fa-f]{6}$'
@@ -169,20 +184,15 @@ router.post('/',
   createAuditMiddleware('create_routine', 'routine'),
   async (req, res, next) => {
     try {
-      const { title, description, type, color, icon, achievable } = req.body;
+      const { title, description, color, icon, achievable } = req.body;
       
-      if (!title || !type) {
-        return res.status(400).json({ error: 'Title and type are required' });
-      }
-
-      if (!['project', 'recurring'].includes(type)) {
-        return res.status(400).json({ error: 'Type must be either project or recurring' });
+      if (!title) {
+        return res.status(400).json({ error: 'Title is required' });
       }
 
       const routine = await routineService.createRoutine({
         title,
         description,
-        type,
         color,
         icon,
         achievable
@@ -227,9 +237,6 @@ router.post('/',
  *                 pattern: '^#[0-9A-Fa-f]{6}$'
  *               icon:
  *                 type: string
- *               type:
- *                 type: string
- *                 enum: [project, recurring]
  *               achievable:
  *                 type: boolean
  *               status:
@@ -241,6 +248,56 @@ router.post('/',
  *       404:
  *         description: Routine not found
  */
+
+/**
+ * @swagger
+ * /api/routines/reorder:
+ *   put:
+ *     summary: Reorder routines
+ *     description: Updates the display order of routines
+ *     tags: [Routines]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               order:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       format: uuid
+ *                     order:
+ *                       type: integer
+ *     responses:
+ *       200:
+ *         description: Routines reordered successfully
+ */
+router.put('/reorder',
+  createAuditMiddleware('reorder_routines', 'routine'),
+  async (req, res, next) => {
+    try {
+      const { order } = req.body;
+      
+      if (!order || !Array.isArray(order)) {
+        return res.status(400).json({ error: 'Order array is required' });
+      }
+
+      await routineService.updateRoutineOrder(order);
+      
+      // Audit log
+      await req.audit(null, null, { order });
+      
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 router.put('/:id',
   createAuditMiddleware('update_routine', 'routine'),
   async (req, res, next) => {

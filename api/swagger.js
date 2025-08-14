@@ -118,20 +118,43 @@ const swaggerDefinition = {
             type: 'string',
             description: 'Emoji icon'
           },
-          type: {
-            type: 'string',
-            enum: ['project', 'recurring']
-          },
           status: {
             type: 'string',
-            enum: ['active', 'paused', 'completed', 'archived']
+            enum: ['active', 'paused', 'completed']
           },
           achievable: {
             type: 'boolean',
             description: 'Can be marked complete'
+          },
+          is_archived: {
+            type: 'boolean',
+            description: 'Archive state (separate from operational status)'
+          },
+          pause_until: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true,
+            description: 'When paused routine should resume'
+          },
+          display_order: {
+            type: 'integer',
+            description: 'Custom display order for drag-and-drop'
+          },
+          created_at: {
+            type: 'string',
+            format: 'date-time'
+          },
+          updated_at: {
+            type: 'string',
+            format: 'date-time'
+          },
+          archived_at: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true
           }
         },
-        required: ['title', 'type']
+        required: ['title']
       },
       Error: {
         type: 'object',

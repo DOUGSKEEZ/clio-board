@@ -5,7 +5,7 @@ const { logger } = require('../middleware/logger');
 class RoutineService {
   /**
    * Get all active routines
-   * @param {Object} filters - Optional filters (status, type)
+   * @param {Object} filters - Optional filters (status)
    * @returns {Array} Array of routines
    */
   async getRoutines(filters = {}) {
@@ -16,20 +16,31 @@ class RoutineService {
                COUNT(DISTINCT t.id) FILTER (WHERE t.status = 'completed') as completed_tasks
         FROM routines r
         LEFT JOIN tasks t ON r.id = t.routine_id
-        WHERE r.status != 'archived'
       `;
 
       const values = [];
       let paramCount = 0;
+      const conditions = [];
 
+      // Handle archive filter - default behavior excludes archived routines
+      if (filters.archived !== undefined) {
+        conditions.push(`r.is_archived = $${++paramCount}`);
+        values.push(filters.archived);
+      } else {
+        // Default behavior: exclude archived routines
+        conditions.push(`r.is_archived = false`);
+      }
+
+      // Handle status filter (active/paused/completed)
       if (filters.status) {
-        query += ` AND r.status = $${++paramCount}`;
+        conditions.push(`r.status = $${++paramCount}`);
         values.push(filters.status);
       }
 
-      if (filters.type) {
-        query += ` AND r.type = $${++paramCount}`;
-        values.push(filters.type);
+
+      // Add WHERE clause if we have conditions
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`;
       }
 
       query += ' GROUP BY r.id ORDER BY r.created_at DESC';
@@ -113,10 +124,10 @@ class RoutineService {
       const id = uuidv4();
       const query = `
         INSERT INTO routines (
-          id, title, description, color, icon, type, 
+          id, title, description, color, icon, 
           status, achievable
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8
+          $1, $2, $3, $4, $5, $6, $7
         ) RETURNING *
       `;
 
@@ -126,7 +137,6 @@ class RoutineService {
         routineData.description || null,
         routineData.color || '#3498db',
         routineData.icon || '📌',
-        routineData.type || 'project',
         'active',
         routineData.achievable || false
       ];
@@ -148,7 +158,7 @@ class RoutineService {
    */
   async updateRoutine(routineId, updates) {
     try {
-      const allowedFields = ['title', 'description', 'color', 'icon', 'type', 'status', 'achievable', 'pause_until'];
+      const allowedFields = ['title', 'description', 'color', 'icon', 'status', 'achievable', 'pause_until'];
       const setClause = [];
       const values = [];
       let paramCount = 1;
@@ -216,7 +226,7 @@ class RoutineService {
     try {
       const query = `
         UPDATE routines
-        SET status = 'archived', 
+        SET is_archived = true, 
             archived_at = NOW(),
             updated_at = NOW()
         WHERE id = $1
@@ -275,7 +285,7 @@ class RoutineService {
     try {
       const query = `
         UPDATE routines
-        SET status = 'active',
+        SET is_archived = false,
             archived_at = NULL,
             updated_at = NOW()
         WHERE id = $1
@@ -287,6 +297,37 @@ class RoutineService {
       return result.rows[0];
     } catch (error) {
       logger.error('Error restoring routine', { error: error.message, routineId });
+      throw error;
+    }
+  }
+
+  /**
+   * Update the display order of routines
+   */
+  async updateRoutineOrder(orderArray) {
+    try {
+      const client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+        
+        for (const item of orderArray) {
+          await client.query(
+            'UPDATE routines SET display_order = $1 WHERE id = $2',
+            [item.order, item.id]
+          );
+        }
+        
+        await client.query('COMMIT');
+        logger.info('Routine order updated', { orderUpdates: orderArray.length });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      logger.error('Error updating routine order', { error: error.message });
       throw error;
     }
   }

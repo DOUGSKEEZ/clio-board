@@ -18,7 +18,7 @@ class NoteService {
         FROM notes n
         LEFT JOIN tasks t ON n.task_id = t.id
         LEFT JOIN routines r ON n.routine_id = r.id
-        WHERE n.archived = false
+        WHERE n.is_archived = false
       `;
 
       const values = [];
@@ -40,6 +40,31 @@ class NoteService {
       return result.rows;
     } catch (error) {
       logger.error('Error fetching notes', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all archived notes
+   * @returns {Array} Array of archived notes
+   */
+  async getArchivedNotes() {
+    try {
+      const query = `
+        SELECT n.*,
+               t.title as task_title,
+               r.title as routine_title
+        FROM notes n
+        LEFT JOIN tasks t ON n.task_id = t.id
+        LEFT JOIN routines r ON n.routine_id = r.id
+        WHERE n.is_archived = true
+        ORDER BY n.archived_at DESC, n.created_at DESC
+      `;
+
+      const result = await pool.query(query);
+      return result.rows;
+    } catch (error) {
+      logger.error('Error fetching archived notes', { error: error.message });
       throw error;
     }
   }
@@ -168,7 +193,7 @@ class NoteService {
     try {
       const query = `
         UPDATE notes
-        SET archived = true,
+        SET is_archived = true,
             archived_at = NOW(),
             updated_at = NOW()
         WHERE id = $1
@@ -193,7 +218,7 @@ class NoteService {
     try {
       const query = `
         UPDATE notes
-        SET archived = false,
+        SET is_archived = false,
             archived_at = NULL,
             updated_at = NOW()
         WHERE id = $1
@@ -241,7 +266,7 @@ class NoteService {
 
       // Archive the note (but keep it for reference)
       await client.query(
-        'UPDATE notes SET archived = true, archived_at = NOW(), task_id = $1 WHERE id = $2',
+        'UPDATE notes SET is_archived = true, archived_at = NOW(), task_id = $1 WHERE id = $2',
         [task.id, noteId]
       );
 
@@ -255,7 +280,7 @@ class NoteService {
 
       return {
         task,
-        archivedNote: { ...note, archived: true, task_id: task.id }
+        archivedNote: { ...note, is_archived: true, task_id: task.id }
       };
     } catch (error) {
       await client.query('ROLLBACK');
