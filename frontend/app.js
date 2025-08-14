@@ -387,8 +387,36 @@ class ClioBoardApp {
             `;
         }
         
+        // Use the same muted color scheme as routine cards (bg-color-100, text-color-700)
+        const colorClassMap = {
+            blue: 'bg-blue-100 text-blue-700',
+            green: 'bg-green-200 text-green-800',  // Darker green - looks good!
+            purple: 'bg-purple-100 text-purple-700',
+            orange: 'bg-orange-100 text-orange-700',
+            red: 'bg-red-100 text-red-700',
+            yellow: 'bg-yellow-100 text-yellow-700',
+            pink: 'bg-pink-100 text-pink-700',
+            gray: 'bg-gray-100 text-gray-700',
+            brown: 'bg-amber-400 text-amber-900',  // Richer, darker brown
+            teal: 'bg-teal-100 text-teal-700',
+            lime: 'bg-lime-50 text-lime-700',  // Lighter lime - looks good!
+            black: 'bg-gray-600 text-white'  // Muted black - dark gray with white text
+        };
+        
+        // Handle custom brown color with inline styles
+        if (routine.color === 'brown') {
+            return `
+                <span class="routine-tag" style="background-color: #e8d8cf; color: #73513b;">
+                    ${routine.icon} ${this.escapeHtml(routine.title)}
+                </span>
+            `;
+        }
+        
+        // Get the Tailwind classes for this color
+        const colorClasses = colorClassMap[routine.color] || colorClassMap.blue;
+        
         return `
-            <span class="routine-tag text-white" style="background-color: ${routine.color}">
+            <span class="routine-tag ${colorClasses}">
                 ${routine.icon} ${this.escapeHtml(routine.title)}
             </span>
         `;
@@ -437,6 +465,7 @@ class ClioBoardApp {
                 this.closeAddTaskModal();
                 this.closeEditTaskModal();
                 this.closeArchiveModal();
+                this.closeRoutineModal();
             }
         });
 
@@ -460,6 +489,7 @@ class ClioBoardApp {
         const addTaskModal = document.getElementById('add-task-modal');
         const editTaskModal = document.getElementById('edit-task-modal');
         const archiveModal = document.getElementById('archive-modal');
+        const routineModal = document.getElementById('routine-modal');
         
         if (addTaskModal) {
             addTaskModal.addEventListener('click', (e) => {
@@ -481,6 +511,14 @@ class ClioBoardApp {
             archiveModal.addEventListener('click', (e) => {
                 if (e.target === archiveModal) {
                     this.closeArchiveModal();
+                }
+            });
+        }
+        
+        if (routineModal) {
+            routineModal.addEventListener('click', (e) => {
+                if (e.target === routineModal) {
+                    this.closeRoutineModal();
                 }
             });
         }
@@ -1794,17 +1832,17 @@ class ClioBoardApp {
         
         const colorMap = {
             blue: 'bg-blue-100 text-blue-700',
-            green: 'bg-green-100 text-green-700',
+            green: 'bg-green-200 text-green-800',  // Darker green - looks good!
             purple: 'bg-purple-100 text-purple-700',
             orange: 'bg-orange-100 text-orange-700',
             red: 'bg-red-100 text-red-700',
             yellow: 'bg-yellow-100 text-yellow-700',
             pink: 'bg-pink-100 text-pink-700',
             gray: 'bg-gray-100 text-gray-700',
-            indigo: 'bg-indigo-100 text-indigo-700',
+            brown: 'bg-amber-400 text-amber-900',  // Richer, darker brown
             teal: 'bg-teal-100 text-teal-700',
-            lime: 'bg-lime-100 text-lime-700',
-            rose: 'bg-rose-100 text-rose-700'
+            lime: 'bg-lime-50 text-lime-700',  // Lighter lime - looks good!
+            black: 'bg-gray-600 text-white'  // Muted black - dark gray with white text
         };
         
         // Map hex colors to names
@@ -1824,7 +1862,13 @@ class ClioBoardApp {
         if (routine.color && routine.color.startsWith('#')) {
             colorName = hexToColorName[routine.color] || 'blue';
         }
-        const colorClass = colorMap[colorName] || colorMap.blue;
+        // Handle custom brown color for routine cards
+        let colorClass;
+        if (colorName === 'brown') {
+            colorClass = 'custom-brown-card';  // We'll handle this with inline styles
+        } else {
+            colorClass = colorMap[colorName] || colorMap.blue;
+        }
         
         // Use the emoji directly (no mapping needed)
         const icon = routine.icon || '⭐';
@@ -1865,7 +1909,7 @@ class ClioBoardApp {
             </div>
             <p class="text-gray-600 text-sm mb-3 truncate min-h-[1.25rem]">${routine.description ? this.escapeHtml(routine.description) : ''}</p>
             <div class="relative flex items-center justify-between">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colorClass}">
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colorClass === 'custom-brown-card' ? '' : colorClass}" ${colorClass === 'custom-brown-card' ? 'style="background-color: #e8d8cf; color: #73513b;"' : ''}>
                     ${(parseInt(routine.pending_tasks || 0) + parseInt(routine.completed_tasks || 0))} tasks
                 </span>
                 ${routine.achievable ? '<div class="absolute left-1/2 transform -translate-x-1/2"><span class="text-xs text-gray-500">Achievable</span></div>' : ''}
@@ -1978,7 +2022,7 @@ class ClioBoardApp {
                 };
                 colorValue = colorHexMap[routine.color] || routine.color;
                 // If it's already a color name, use it directly
-                if (['blue', 'green', 'purple', 'orange', 'red', 'yellow', 'pink', 'gray', 'indigo', 'teal', 'lime', 'rose'].includes(routine.color)) {
+                if (['blue', 'green', 'purple', 'orange', 'red', 'yellow', 'pink', 'gray', 'brown', 'teal', 'lime', 'black'].includes(routine.color)) {
                     colorValue = routine.color;
                 }
             }

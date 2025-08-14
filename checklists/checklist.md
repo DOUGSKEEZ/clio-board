@@ -125,10 +125,11 @@
 - [ ] **Note Board** - 4-column scratch area (MAJOR MISSING MODULE - implement before Phase 3)
 
 ## Phase 3: Polish & Enhancement 📋 PLANNED
+- [ ] **Font & spacing optimization** - Fine-tune typography and space utilization
+- [ ] **Self-host assets** - Download and serve Tailwind CSS, Font Awesome, SortableJS locally (with custom brown colors in Tailwind config)
 - [ ] Add agent rate limiting (express-rate-limit ~10 lines)
 - [ ] Remove orphan task indicators from dashboard (space saving)
 - [ ] Mobile responsive design
-- [ ] Further UI space optimization
 - [ ] Performance optimizations
 - [ ] Additional UX improvements
 
