@@ -10,6 +10,7 @@ class ClioBoardApp {
         this.apiUrl = window.location.origin;
         this.sortables = {};
         this.expandedLists = new Set(); // Track which lists are expanded
+        this.routineTagsMinimized = localStorage.getItem('routineTagsMinimized') === 'true'; // Global toggle for all routine tags (Trello-style)
         this.currentView = 'tasks'; // Track current view
         this.currentRoutine = null; // Track current routine for detail view
         
@@ -165,21 +166,31 @@ class ClioBoardApp {
             this.routines.find(r => r.id === task.routine_id) : null;
         const isPaused = routineInfo && routineInfo.status === 'paused';
         
-        div.className = `task-card ${isPaused ? 'bg-gray-200 opacity-90' : 'bg-white'} rounded-lg p-2 shadow-sm card-transition cursor-pointer border border-gray-200 hover:border-blue-400 hover:border-2 hover:shadow-md group`;
+        div.className = `task-card ${isPaused ? 'bg-gray-200 opacity-90' : 'bg-white'} rounded-lg p-1.5 shadow-sm card-transition cursor-pointer border border-gray-200 hover:border-blue-400 hover:border-2 hover:shadow-md group`;
         div.setAttribute('data-task-id', task.id);
         div.setAttribute('data-task-type', task.type);
         
         const dueDate = task.due_date ? 
             new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
         
+        const hasListItems = task.type === 'list' && task.items && task.items.length > 0;
+        const minimizedRoutineTag = this.renderMinimizedRoutineTag(routineInfo);
+        const fullRoutineTag = this.renderFullRoutineTag(routineInfo);
+        const hasBottomContent = fullRoutineTag || dueDate;
+        
         div.innerHTML = `
-            <div class="flex items-start justify-between mb-1">
-                <div class="flex items-center flex-1 relative">
+            <div class="flex items-start justify-between ${hasListItems || hasBottomContent ? 'mb-1' : ''}">
+                <div class="flex items-center flex-1 min-w-0 relative">
                     <button class="task-complete-btn absolute left-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-all duration-200 hover:border-green-500 hover:shadow-sm ${task.status === 'completed' ? 'opacity-100 bg-green-500 border-green-500' : 'opacity-0 group-hover:opacity-100 border-gray-300'}" data-task-id="${task.id}">
                         ${task.status === 'completed' ? '<i class="fas fa-check text-white text-xs"></i>' : ''}
                     </button>
-                    <h3 class="text-sm font-medium leading-snug flex-1 transition-all duration-200 ${task.status === 'completed' ? 'text-gray-500 line-through ml-6' : isPaused ? 'text-gray-500 group-hover:ml-6' : 'text-gray-900 group-hover:ml-6'}">${this.escapeHtml(task.title)}</h3>
+                    <h3 class="text-sm font-medium min-w-0 flex-1 transition-all duration-200 truncate ${task.status === 'completed' ? 'text-gray-500 line-through ml-6' : isPaused ? 'text-gray-500 group-hover:ml-6' : 'text-gray-900 group-hover:ml-6'}">${this.escapeHtml(task.title)}</h3>
                 </div>
+                ${minimizedRoutineTag ? `
+                    <div class="flex items-center ml-1 mr-1">
+                        ${minimizedRoutineTag}
+                    </div>
+                ` : ''}
                 <div class="flex items-center space-x-1">
                     <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all relative">
                         <button class="task-menu-btn text-gray-400 hover:text-gray-600 transition-all p-1 -m-1 rounded" data-task-id="${task.id}">
@@ -196,15 +207,16 @@ class ClioBoardApp {
                 </div>
             </div>
             
-            ${task.type === 'list' && task.items && task.items.length > 0 ? this.renderListItems(task.items, task, isPaused) : ''}
+            ${hasListItems ? this.renderListItems(task.items, task, isPaused) : ''}
             
-            <div class="flex items-center justify-between mt-2">
-                ${this.renderRoutineTag(routineInfo)}
-                <div class="flex items-center space-x-2 text-xs text-gray-500">
-                    ${task.type === 'list' ? this.renderListStatus(task.items) : ''}
-                    ${dueDate ? `<span><i class="fas fa-calendar mr-1"></i>${dueDate}</span>` : ''}
+            ${hasBottomContent ? `
+                <div class="flex items-center justify-between ${hasListItems ? 'mt-1' : 'mt-0.5'}">
+                    ${fullRoutineTag}
+                    <div class="flex items-center space-x-2 text-xs text-gray-500">
+                        ${dueDate ? `<span><i class="fas fa-calendar mr-1"></i>${dueDate}</span>` : ''}
+                    </div>
                 </div>
-            </div>
+            ` : ''}
         `;
         
         // Add click handlers
@@ -301,6 +313,15 @@ class ClioBoardApp {
             });
         }
         
+        // Add routine tag click handler for global toggle (Trello-style)
+        const routineTag = div.querySelector('.routine-tag, .routine-tag-minimized');
+        if (routineTag) {
+            routineTag.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent task edit modal
+                this.toggleRoutineTagsDisplay();
+            });
+        }
+        
         return div;
     }
 
@@ -359,16 +380,25 @@ class ClioBoardApp {
             </button>
         ` : '';
         
+        const listStatus = this.renderListStatus(items);
+        
         return `
-            <div class="list-items space-y-1 mb-2 p-2 ${isPaused ? 'bg-gray-100 opacity-75' : 'bg-gray-50'} rounded" data-list-container="${task.id}">
+            <div class="list-items space-y-1 mb-1 p-1.5 ${isPaused ? 'bg-gray-100 opacity-75' : 'bg-gray-50'} rounded" data-list-container="${task.id}">
                 <div class="visible-items">
                     ${visibleItemsHtml}
                 </div>
                 <div class="hidden-items hidden">
                     ${hiddenItemsHtml}
                 </div>
-                ${expandButton}
-                ${collapseButton}
+                <div class="flex items-center justify-between mt-0.5">
+                    <div>
+                        ${expandButton}
+                        ${collapseButton}
+                    </div>
+                    <div class="text-xs text-gray-500">
+                        ${listStatus}
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -384,52 +414,228 @@ class ClioBoardApp {
 
     renderRoutineTag(routine) {
         if (!routine) {
-            return `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">☐ No routine</span>`;
+            return ''; // Don't show anything for tasks without routines
         }
+        
+        const isPaused = routine.status === 'paused';
+        const isMinimized = this.routineTagsMinimized;
+        
+        // Color mapping for both full and minimized states
+        const colorClassMap = {
+            blue: { full: 'bg-blue-100 text-blue-700', minimal: 'bg-blue-500' },
+            green: { full: 'bg-green-200 text-green-800', minimal: 'bg-green-500' },
+            purple: { full: 'bg-purple-100 text-purple-700', minimal: 'bg-purple-500' },
+            orange: { full: 'bg-orange-100 text-orange-700', minimal: 'bg-orange-500' },
+            red: { full: 'bg-red-100 text-red-700', minimal: 'bg-red-500' },
+            yellow: { full: 'bg-yellow-100 text-yellow-700', minimal: 'bg-yellow-500' },
+            pink: { full: 'bg-pink-100 text-pink-700', minimal: 'bg-pink-500' },
+            gray: { full: 'bg-gray-100 text-gray-700', minimal: 'bg-gray-500' },
+            brown: { full: 'bg-amber-400 text-amber-900', minimal: 'bg-amber-700' },
+            teal: { full: 'bg-teal-100 text-teal-700', minimal: 'bg-teal-500' },
+            lime: { full: 'bg-lime-50 text-lime-700', minimal: 'bg-lime-500' },
+            black: { full: 'bg-gray-600 text-white', minimal: 'bg-gray-800' }
+        };
+        
+        if (isPaused) {
+            if (isMinimized) {
+                return `
+                    <span class="routine-tag-minimized bg-gray-400 cursor-pointer transition-all duration-200 hover:scale-110" 
+                          data-routine-id="${routine.id}" 
+                          title="${routine.icon} ${this.escapeHtml(routine.title)} (Paused)">
+                    </span>
+                `;
+            } else {
+                return `
+                    <span class="routine-tag text-gray-600 bg-gray-100 opacity-80 cursor-pointer" 
+                          data-routine-id="${routine.id}">
+                        ${routine.icon} ${this.escapeHtml(routine.title)}
+                    </span>
+                `;
+            }
+        }
+        
+        // Handle custom brown color with inline styles
+        if (routine.color === 'brown') {
+            if (isMinimized) {
+                return `
+                    <span class="routine-tag-minimized cursor-pointer transition-all duration-200 hover:scale-110" 
+                          style="background-color: #92633f;" 
+                          data-routine-id="${routine.id}"
+                          title="${routine.icon} ${this.escapeHtml(routine.title)}">
+                    </span>
+                `;
+            } else {
+                return `
+                    <span class="routine-tag cursor-pointer" 
+                          style="background-color: #e8d8cf; color: #73513b;" 
+                          data-routine-id="${routine.id}">
+                        ${routine.icon} ${this.escapeHtml(routine.title)}
+                    </span>
+                `;
+            }
+        }
+        
+        // Get the color classes for this routine
+        const colorConfig = colorClassMap[routine.color] || colorClassMap.blue;
+        
+        if (isMinimized) {
+            return `
+                <span class="routine-tag-minimized ${colorConfig.minimal} cursor-pointer transition-all duration-200 hover:scale-110" 
+                      data-routine-id="${routine.id}"
+                      title="${routine.icon} ${this.escapeHtml(routine.title)}">
+                </span>
+            `;
+        } else {
+            return `
+                <span class="routine-tag ${colorConfig.full} cursor-pointer" 
+                      data-routine-id="${routine.id}">
+                    ${routine.icon} ${this.escapeHtml(routine.title)}
+                </span>
+            `;
+        }
+    }
+
+    // Helper methods for different routine tag placements
+    renderMinimizedRoutineTag(routine) {
+        if (!routine || !this.routineTagsMinimized) return '';
         
         const isPaused = routine.status === 'paused';
         
         if (isPaused) {
             return `
-                <span class="routine-tag text-gray-600 bg-gray-100 opacity-80">
-                    ${routine.icon} ${this.escapeHtml(routine.title)}
+                <span class="routine-tag-minimized bg-gray-400 cursor-pointer transition-all duration-200 hover:scale-110" 
+                      data-routine-id="${routine.id}" 
+                      title="${routine.icon} ${this.escapeHtml(routine.title)} (Paused)">
                 </span>
             `;
         }
-        
-        // Use the same muted color scheme as routine cards (bg-color-100, text-color-700)
-        const colorClassMap = {
-            blue: 'bg-blue-100 text-blue-700',
-            green: 'bg-green-200 text-green-800',  // Darker green - looks good!
-            purple: 'bg-purple-100 text-purple-700',
-            orange: 'bg-orange-100 text-orange-700',
-            red: 'bg-red-100 text-red-700',
-            yellow: 'bg-yellow-100 text-yellow-700',
-            pink: 'bg-pink-100 text-pink-700',
-            gray: 'bg-gray-100 text-gray-700',
-            brown: 'bg-amber-400 text-amber-900',  // Richer, darker brown
-            teal: 'bg-teal-100 text-teal-700',
-            lime: 'bg-lime-50 text-lime-700',  // Lighter lime - looks good!
-            black: 'bg-gray-600 text-white'  // Muted black - dark gray with white text
-        };
-        
+
         // Handle custom brown color with inline styles
         if (routine.color === 'brown') {
             return `
-                <span class="routine-tag" style="background-color: #e8d8cf; color: #73513b;">
+                <span class="routine-tag-minimized cursor-pointer transition-all duration-200 hover:scale-110" 
+                      style="background-color: #92633f;" 
+                      data-routine-id="${routine.id}"
+                      title="${routine.icon} ${this.escapeHtml(routine.title)}">
+                </span>
+            `;
+        }
+        
+        // Color mapping for minimized state - use more visible/darker colors
+        const colorClassMap = {
+            blue: 'bg-blue-500', green: 'bg-green-500', purple: 'bg-purple-500',
+            orange: 'bg-orange-500', red: 'bg-red-500', yellow: 'bg-yellow-500',
+            pink: 'bg-pink-500', gray: 'bg-gray-500', brown: 'bg-amber-700',
+            teal: 'bg-teal-500', lime: 'bg-lime-500', black: 'bg-gray-800'
+        };
+        
+        const colorClass = colorClassMap[routine.color] || 'bg-blue-500';
+        
+        return `
+            <span class="routine-tag-minimized ${colorClass} cursor-pointer transition-all duration-200 hover:scale-110" 
+                  data-routine-id="${routine.id}"
+                  title="${routine.icon} ${this.escapeHtml(routine.title)}">
+            </span>
+        `;
+    }
+
+    renderFullRoutineTag(routine) {
+        if (!routine || this.routineTagsMinimized) return '';
+        
+        const isPaused = routine.status === 'paused';
+        
+        if (isPaused) {
+            return `
+                <span class="routine-tag text-gray-600 bg-gray-100 opacity-80 cursor-pointer" 
+                      data-routine-id="${routine.id}">
+                    ${routine.icon} ${this.escapeHtml(routine.title)}
+                </span>
+            `;
+        }
+
+        // Handle custom brown color with inline styles
+        if (routine.color === 'brown') {
+            return `
+                <span class="routine-tag cursor-pointer" 
+                      style="background-color: #e8d8cf; color: #73513b;" 
+                      data-routine-id="${routine.id}">
                     ${routine.icon} ${this.escapeHtml(routine.title)}
                 </span>
             `;
         }
         
-        // Get the Tailwind classes for this color
-        const colorClasses = colorClassMap[routine.color] || colorClassMap.blue;
+        // Color mapping for full state
+        const colorClassMap = {
+            blue: 'bg-blue-100 text-blue-700', green: 'bg-green-200 text-green-800',
+            purple: 'bg-purple-100 text-purple-700', orange: 'bg-orange-100 text-orange-700',
+            red: 'bg-red-100 text-red-700', yellow: 'bg-yellow-100 text-yellow-700',
+            pink: 'bg-pink-100 text-pink-700', gray: 'bg-gray-100 text-gray-700',
+            brown: 'bg-amber-400 text-amber-900', teal: 'bg-teal-100 text-teal-700',
+            lime: 'bg-lime-50 text-lime-700', black: 'bg-gray-600 text-white'
+        };
+        
+        const colorClass = colorClassMap[routine.color] || 'bg-blue-100 text-blue-700';
         
         return `
-            <span class="routine-tag ${colorClasses}">
+            <span class="routine-tag ${colorClass} cursor-pointer" 
+                  data-routine-id="${routine.id}">
                 ${routine.icon} ${this.escapeHtml(routine.title)}
             </span>
         `;
+    }
+
+    updateRoutinePickerDisplay(prefix) {
+        // Get the currently selected routine ID for this prefix
+        const hiddenInput = document.getElementById(`${prefix}-routine`);
+        if (!hiddenInput || !hiddenInput.value) return;
+        
+        const routineId = hiddenInput.value;
+        
+        // Check if the routine being edited is the currently selected one
+        if (this.currentEditingRoutine && this.currentEditingRoutine.id === routineId) {
+            // Update just the display span without affecting picker state
+            const displaySpan = document.getElementById(`${prefix}-routine-display`);
+            if (displaySpan) {
+                const routine = this.routines.find(r => r.id === routineId);
+                if (routine) {
+                    const routineTag = this.renderRoutineTag(routine);
+                    displaySpan.innerHTML = routineTag;
+                    console.log(`🎨 Updated routine picker display for '${prefix}' with new color`);
+                }
+            }
+        }
+    }
+
+    resetRoutinePickerToMain(prefix) {
+        // Always ensure we're showing the main picker view and hiding the edit panel
+        const mainView = document.getElementById(`${prefix}-routine-main`);
+        const editView = document.getElementById(`${prefix}-routine-edit`);
+        
+        if (mainView && editView) {
+            mainView.classList.remove('hidden');
+            editView.classList.add('hidden');
+        }
+        
+        // Clear any editing state
+        this.currentEditingRoutine = null;
+        this.selectedEditColor = null;
+        
+        console.log(`🔄 Reset routine picker '${prefix}' to main view`);
+    }
+
+    // Trello-style routine tag toggle functionality
+    toggleRoutineTagsDisplay() {
+        this.routineTagsMinimized = !this.routineTagsMinimized;
+        localStorage.setItem('routineTagsMinimized', this.routineTagsMinimized.toString());
+        console.log(`🏷️ Routine tags ${this.routineTagsMinimized ? 'minimized' : 'expanded'}`);
+        
+        // Re-render the board to apply the new tag display mode
+        this.renderBoard();
+        
+        // If we're in routines view, re-render that too
+        if (this.currentView === 'routines') {
+            this.loadRoutinesView();
+        }
     }
 
     getColumnId(column) {
@@ -844,8 +1050,10 @@ class ClioBoardApp {
         // Setup edit panel event listeners
         this.setupRoutineEditListeners(prefix);
         
-        // Add Enter key handler for Edit Task Modal
+        // Add Enter key handlers for both Add and Edit Task Modals
+        this.setupAddTaskKeyHandlers();
         this.setupEditTaskKeyHandlers();
+        this.setupEditTaskMenuHandlers();
         
         // Close on outside click
         document.addEventListener('click', (e) => {
@@ -1068,15 +1276,6 @@ class ClioBoardApp {
             });
         }
         
-        // Delete button
-        const deleteBtn = document.querySelector(`[data-prefix="${prefix}"].routine-edit-delete-btn`);
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                this.deleteRoutineFromEdit(prefix);
-            });
-        }
         
         // Title input Enter key handler
         const titleInput = document.getElementById(`${prefix}-edit-routine-title`);
@@ -1088,6 +1287,94 @@ class ClioBoardApp {
                     this.saveRoutineEdit(prefix);
                 }
             });
+        }
+    }
+    
+    setupAddTaskKeyHandlers() {
+        // Only set up once
+        if (this.addTaskKeyHandlersSetup) return;
+        this.addTaskKeyHandlersSetup = true;
+        
+        // Enter key on title field saves the task
+        const addTaskTitle = document.getElementById('task-title');
+        if (addTaskTitle) {
+            addTaskTitle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const form = document.getElementById('add-task-form');
+                    if (form) {
+                        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    }
+                }
+            });
+        }
+        
+        // Ctrl+Enter on notes field saves the task
+        const addTaskNotes = document.getElementById('task-notes');
+        if (addTaskNotes) {
+            addTaskNotes.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    const form = document.getElementById('add-task-form');
+                    if (form) {
+                        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    }
+                }
+            });
+        }
+    }
+    
+    setupEditTaskMenuHandlers() {
+        // Only set up once
+        if (this.editTaskMenuHandlersSetup) return;
+        this.editTaskMenuHandlersSetup = true;
+        
+        const menuBtn = document.getElementById('edit-task-menu-btn');
+        const menu = document.getElementById('edit-task-menu');
+        const archiveBtn = document.getElementById('archive-from-modal-btn');
+        
+        if (menuBtn && menu) {
+            // Toggle menu on button click
+            menuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.classList.toggle('hidden');
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!menuBtn.contains(e.target) && !menu.contains(e.target)) {
+                    menu.classList.add('hidden');
+                }
+            });
+        }
+        
+        if (archiveBtn) {
+            archiveBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await this.archiveTaskFromModal();
+            });
+        }
+    }
+    
+    async archiveTaskFromModal() {
+        if (!this.editingTask) return;
+        
+        try {
+            await this.apiCall(`/api/tasks/${this.editingTask.id}/archive`, {
+                method: 'PUT'
+            });
+            
+            // Close the modal
+            this.closeEditTaskModal();
+            
+            // Refresh both tasks and board display
+            await this.loadTasks();
+            this.renderBoard();
+            
+            console.log('✅ Task archived from modal');
+        } catch (error) {
+            console.error('Error archiving task from modal:', error);
+            alert('Failed to archive task. Please try again.');
         }
     }
     
@@ -1377,11 +1664,49 @@ class ClioBoardApp {
         });
     }
     
-    selectEditColor(colorName, prefix) {
+    async selectEditColor(colorName, prefix) {
         // Update the visual selection
         this.populateColorPicker(colorName, prefix);
         // Store the selected color for saving
         this.selectedEditColor = colorName;
+        
+        // Auto-save the color change immediately
+        await this.saveRoutineColor(colorName);
+    }
+    
+    async saveRoutineColor(colorName) {
+        if (!this.currentEditingRoutine) return;
+        
+        try {
+            const updateData = { color: colorName };
+            
+            console.log('Auto-saving routine color:', updateData);
+            
+            const updatedRoutine = await this.apiCall(`/api/routines/${this.currentEditingRoutine.id}`, {
+                method: 'PUT',
+                body: JSON.stringify(updateData)
+            });
+            
+            // Update local cache
+            const routineIndex = this.routines.findIndex(r => r.id === this.currentEditingRoutine.id);
+            if (routineIndex !== -1) {
+                this.routines[routineIndex] = updatedRoutine;
+            }
+            
+            // Refresh the routine picker display and force board re-render
+            await this.loadRoutines();
+            this.renderBoard();
+            
+            // Update the routine picker display for the current editing prefix
+            if (this.currentEditingRoutine && this.currentEditingRoutine.prefix) {
+                this.updateRoutinePickerDisplay(this.currentEditingRoutine.prefix);
+            }
+            
+            console.log('✅ Routine color auto-saved successfully');
+        } catch (error) {
+            console.error('Error auto-saving routine color:', error);
+            alert('Failed to save color. Please try again.');
+        }
     }
     
     async saveRoutineEdit(prefix) {
@@ -1396,12 +1721,10 @@ class ClioBoardApp {
         }
         
         try {
-            const updateData = {
-                title: newTitle,
-                color: this.selectedEditColor || this.routines.find(r => r.id === this.currentEditingRoutine.id)?.color || 'blue'
-            };
+            // Only save title since color is auto-saved
+            const updateData = { title: newTitle };
             
-            console.log('Saving routine edit:', updateData);
+            console.log('Saving routine title:', updateData);
             
             const updatedRoutine = await this.apiCall(`/api/routines/${this.currentEditingRoutine.id}`, {
                 method: 'PUT',
@@ -1497,8 +1820,9 @@ class ClioBoardApp {
                 body: JSON.stringify({ status: newStatus })
             });
             
-            // Refresh board to show updated status
+            // Refresh board to show updated status and update routine counts
             await this.loadTasks();
+            await this.loadRoutines(); // Refresh routine task counts
             this.renderBoard();
         } catch (error) {
             console.error('Failed to toggle task completion:', error);
@@ -1514,8 +1838,9 @@ class ClioBoardApp {
                 method: 'PUT'
             });
             
-            // Refresh board to remove archived task
+            // Refresh board to remove archived task and update routine counts
             await this.loadTasks();
+            await this.loadRoutines(); // Refresh routine task counts
             this.renderBoard();
         } catch (error) {
             console.error('Failed to archive task:', error);
@@ -1624,7 +1949,8 @@ class ClioBoardApp {
             modalTitle.innerHTML = `Add Task - <strong>${columnNames[defaultColumn] || 'Today'}</strong>`;
         }
         
-        // Reset routine selection to "No routine"
+        // Reset routine picker to main view and clear selection
+        this.resetRoutinePickerToMain('task');
         this.setRoutinePickerSelection('task', null);
         
         modal.classList.remove('hidden');
@@ -1807,8 +2133,13 @@ class ClioBoardApp {
             this.initializeListSorting('edit-list-items-container');
         }, 10);
         
-        // Set current routine selection for the picker
+        // Reset routine picker to main view first, then set selection
+        this.resetRoutinePickerToMain('edit-task');
         this.setRoutinePickerSelection('edit-task', task.routine_id);
+        
+        // Close any open menu from previous modal usage
+        const menu = document.getElementById('edit-task-menu');
+        if (menu) menu.classList.add('hidden');
         
         modal.classList.remove('hidden');
         document.getElementById('edit-task-title').focus();
@@ -1915,7 +2246,14 @@ class ClioBoardApp {
 
         container.innerHTML = '';
         
-        this.archivedRoutines.forEach(routine => {
+        // Sort by archived_at timestamp, most recent first
+        const sortedRoutines = [...this.archivedRoutines].sort((a, b) => {
+            const dateA = new Date(a.archived_at);
+            const dateB = new Date(b.archived_at);
+            return dateB - dateA; // Descending order (most recent first)
+        });
+        
+        sortedRoutines.forEach(routine => {
             const routineElement = this.createArchivedRoutineCard(routine);
             container.appendChild(routineElement);
         });
@@ -1931,7 +2269,14 @@ class ClioBoardApp {
 
         container.innerHTML = '';
         
-        this.archivedTasks.forEach(task => {
+        // Sort by archived_at timestamp, most recent first
+        const sortedTasks = [...this.archivedTasks].sort((a, b) => {
+            const dateA = new Date(a.archived_at);
+            const dateB = new Date(b.archived_at);
+            return dateB - dateA; // Descending order (most recent first)
+        });
+        
+        sortedTasks.forEach(task => {
             const taskElement = this.createArchivedTaskCard(task);
             container.appendChild(taskElement);
         });
@@ -1941,10 +2286,13 @@ class ClioBoardApp {
         const div = document.createElement('div');
         div.className = 'bg-gray-50 rounded-lg p-3 border border-gray-200';
         
-        const archivedDate = new Date(routine.archived_at).toLocaleDateString('en-US', { 
+        const archivedDateTime = new Date(routine.archived_at).toLocaleString('en-US', { 
             month: 'short', 
             day: 'numeric',
-            year: 'numeric'
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
         });
         
         div.innerHTML = `
@@ -1956,7 +2304,7 @@ class ClioBoardApp {
                     </div>
                     ${routine.description ? `<p class="text-xs text-gray-600 mb-2">${this.escapeHtml(routine.description)}</p>` : ''}
                     <div class="flex items-center space-x-2 text-xs text-gray-500">
-                        <span>Archived ${archivedDate}</span>
+                        <span>Archived ${archivedDateTime}</span>
                         <span>•</span>
                         <span>${(parseInt(routine.pending_tasks || 0) + parseInt(routine.completed_tasks || 0))} tasks</span>
                         ${routine.achievable ? '<span>• Achievable</span>' : ''}
@@ -1989,10 +2337,13 @@ class ClioBoardApp {
         const dueDate = task.due_date ? 
             new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
             
-        const archivedDate = new Date(task.archived_at).toLocaleDateString('en-US', { 
+        const archivedDateTime = new Date(task.archived_at).toLocaleString('en-US', { 
             month: 'short', 
             day: 'numeric',
-            year: 'numeric'
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
         });
         
         div.innerHTML = `
@@ -2000,7 +2351,7 @@ class ClioBoardApp {
                 <div class="flex-1">
                     <h3 class="text-sm font-medium ${task.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-900'}">${this.escapeHtml(task.title)}</h3>
                     <div class="flex items-center space-x-2 mt-1 text-xs text-gray-500">
-                        <span>Archived ${archivedDate}</span>
+                        <span>Archived ${archivedDateTime}</span>
                         <span>•</span>
                         <span class="capitalize">${task.status}</span>
                         ${task.column_name ? `<span>• ${task.column_name.replace('_', ' ')}</span>` : ''}
@@ -2219,8 +2570,9 @@ class ClioBoardApp {
                 }
             }
             
-            // Reload tasks to get updated data
+            // Reload tasks and routines to get updated data
             await this.loadTasks();
+            await this.loadRoutines(); // Refresh routine task counts
             this.renderBoard();
             this.closeEditTaskModal();
             
@@ -2271,6 +2623,8 @@ class ClioBoardApp {
                 await this.loadTasks();
             }
             
+            // Refresh routines to update task counts
+            await this.loadRoutines();
             this.renderBoard();
             this.closeAddTaskModal();
         } catch (error) {
@@ -2550,7 +2904,7 @@ class ClioBoardApp {
                         <i class="fas fa-ellipsis-h text-sm"></i>
                     </button>
                     <div class="routine-menu absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[150px] hidden">
-                        ${!routine.paused_until ? 
+                        ${routine.status !== 'paused' ? 
                             `<button class="pause-routine-btn w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" data-routine-id="${routine.id}">
                                 <i class="fas fa-pause text-xs mr-2"></i>Pause
                             </button>` :
@@ -2558,17 +2912,14 @@ class ClioBoardApp {
                                 <i class="fas fa-play text-xs mr-2"></i>Resume
                             </button>`
                         }
-                        ${routine.achievable && !routine.completed ? 
+                        ${routine.achievable && routine.status !== 'completed' ? 
                             `<button class="complete-routine-btn w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" data-routine-id="${routine.id}">
                                 <i class="fas fa-check text-xs mr-2"></i>Complete
                             </button>` : ''
                         }
-                        <button class="archive-routine-btn w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" data-routine-id="${routine.id}">
-                            <i class="fas fa-archive text-xs mr-2"></i>Archive
-                        </button>
                         <div class="border-t border-gray-200"></div>
-                        <button class="delete-routine-btn w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50" data-routine-id="${routine.id}">
-                            <i class="fas fa-trash text-xs mr-2"></i>Delete
+                        <button class="archive-routine-btn w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50" data-routine-id="${routine.id}">
+                            <i class="fas fa-archive text-xs mr-2"></i>Archive
                         </button>
                     </div>
                 </div>
@@ -2647,16 +2998,6 @@ class ClioBoardApp {
             });
         }
         
-        const deleteBtn = div.querySelector('.delete-routine-btn');
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (confirm(`Are you sure you want to delete "${routine.name}"? This cannot be undone.`)) {
-                    await this.deleteRoutine(routine.id);
-                    menu.classList.add('hidden');
-                }
-            });
-        }
         
         return div;
     }
@@ -3018,11 +3359,11 @@ class ClioBoardApp {
     
     async resumeRoutine(routineId) {
         try {
-            // Resume by setting paused_until to null
-            await this.apiCall(`/api/routines/${routineId}/pause`, {
+            // Resume by setting status to 'active' using the general update endpoint
+            await this.apiCall(`/api/routines/${routineId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ resume: true })
+                body: JSON.stringify({ status: 'active', pause_until: null })
             });
             await this.loadRoutines();
             this.loadRoutinesView();
