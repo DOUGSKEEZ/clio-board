@@ -307,29 +307,39 @@ class ClioBoardApp {
     renderListItems(items, task, isPaused = false) {
         if (!items || items.length === 0) return '';
         
-        const visibleItems = items.slice(0, 4);
-        const hiddenItems = items.slice(4);
+        // Sort items by position, falling back to id for stable ordering
+        const sortedItems = [...items].sort((a, b) => {
+            const positionA = a.position !== undefined ? a.position : 999999;
+            const positionB = b.position !== undefined ? b.position : 999999;
+            if (positionA === positionB) {
+                return a.id - b.id; // Fallback to id for stable ordering
+            }
+            return positionA - positionB;
+        });
+        
+        const visibleItems = sortedItems.slice(0, 4);
+        const hiddenItems = sortedItems.slice(4);
         const hasMore = hiddenItems.length > 0;
         
         const visibleItemsHtml = visibleItems.map(item => `
             <div class="flex items-center space-x-2 text-xs">
                 <input type="checkbox" ${item.completed ? 'checked' : ''} 
-                       class="w-3 h-3 text-green-600 list-item-checkbox ${isPaused ? 'opacity-40' : ''}" 
+                       class="w-3 h-3 text-green-600 list-item-checkbox flex-shrink-0 ${isPaused ? 'opacity-40' : ''}" 
                        ${isPaused ? 'style="accent-color: #d1d5db; background-color: #d1d5db !important; -webkit-appearance: none; appearance: none; border: 1px solid #9ca3af; border-radius: 3px;"' : ''}
                        data-task-id="${task.id}"
                        data-item-id="${item.id}">
-                <span class="${item.completed ? 'line-through text-gray-500' : isPaused ? 'text-gray-500' : 'text-gray-700'}">${this.escapeHtml(item.title)}</span>
+                <span class="truncate ${item.completed ? 'line-through text-gray-500' : isPaused ? 'text-gray-500' : 'text-gray-700'}" title="${this.escapeHtml(item.title)}">${this.escapeHtml(item.title)}</span>
             </div>
         `).join('');
         
         const hiddenItemsHtml = hiddenItems.map(item => `
             <div class="flex items-center space-x-2 text-xs">
                 <input type="checkbox" ${item.completed ? 'checked' : ''} 
-                       class="w-3 h-3 text-green-600 list-item-checkbox ${isPaused ? 'opacity-40' : ''}" 
+                       class="w-3 h-3 text-green-600 list-item-checkbox flex-shrink-0 ${isPaused ? 'opacity-40' : ''}" 
                        ${isPaused ? 'style="accent-color: #d1d5db; background-color: #d1d5db !important; -webkit-appearance: none; appearance: none; border: 1px solid #9ca3af; border-radius: 3px;"' : ''}
                        data-task-id="${task.id}"
                        data-item-id="${item.id}">
-                <span class="${item.completed ? 'line-through text-gray-500' : isPaused ? 'text-gray-500' : 'text-gray-700'}">${this.escapeHtml(item.title)}</span>
+                <span class="truncate ${item.completed ? 'line-through text-gray-500' : isPaused ? 'text-gray-500' : 'text-gray-700'}" title="${this.escapeHtml(item.title)}">${this.escapeHtml(item.title)}</span>
             </div>
         `).join('');
         
@@ -793,6 +803,663 @@ class ClioBoardApp {
                 this.handleCompletedToggle();
             });
         }
+        
+        // Setup routine pickers for both modals
+        this.setupRoutinePicker('task');
+        this.setupRoutinePicker('edit-task');
+    }
+
+    // Routine Picker Methods
+    setupRoutinePicker(prefix) {
+        const button = document.getElementById(`${prefix}-routine-btn`);
+        const picker = document.getElementById(`${prefix}-routine-picker`);
+        const search = document.getElementById(`${prefix}-routine-search`);
+        
+        if (!button || !picker || !search) return;
+        
+        // Button click handler
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isOpen = !picker.classList.contains('hidden');
+            
+            // Close all other pickers
+            document.querySelectorAll('[id$="-routine-picker"]').forEach(p => {
+                if (p !== picker) p.classList.add('hidden');
+            });
+            
+            if (isOpen) {
+                picker.classList.add('hidden');
+            } else {
+                this.populateRoutinePicker(prefix);
+                picker.classList.remove('hidden');
+                search.focus();
+            }
+        });
+        
+        // Search input handler
+        search.addEventListener('input', (e) => {
+            this.filterRoutinePicker(prefix, e.target.value);
+        });
+        
+        // Setup edit panel event listeners
+        this.setupRoutineEditListeners(prefix);
+        
+        // Add Enter key handler for Edit Task Modal
+        this.setupEditTaskKeyHandlers();
+        
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (!button.contains(e.target) && !picker.contains(e.target)) {
+                picker.classList.add('hidden');
+            }
+        });
+        
+        // Close on escape key (handled by existing ESC handler)
+        search.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                picker.classList.add('hidden');
+                button.focus();
+            }
+        });
+    }
+    
+    async populateRoutinePicker(prefix) {
+        try {
+            const optionsContainer = document.getElementById(`${prefix}-routine-options`);
+            if (!optionsContainer) return;
+            
+            // Get active and paused routines
+            const routines = await this.apiCall('/api/routines');
+            const availableRoutines = routines.filter(routine => 
+                !routine.is_archived && 
+                (routine.status === 'active' || routine.status === 'paused')
+            );
+            
+            // Sort routines by display_order (same as Routines page)
+            availableRoutines.sort((a, b) => {
+                // If both have display_order, sort by that
+                if (a.display_order !== null && b.display_order !== null) {
+                    return a.display_order - b.display_order;
+                }
+                // If only one has display_order, it comes first
+                if (a.display_order !== null) return -1;
+                if (b.display_order !== null) return 1;
+                // Otherwise sort by creation date (oldest first)
+                return new Date(a.created_at) - new Date(b.created_at);
+            });
+            
+            // Clear existing options
+            optionsContainer.innerHTML = '';
+            
+            // Add "No routine" option
+            const noRoutineOption = this.createRoutineOption(null, prefix);
+            optionsContainer.appendChild(noRoutineOption);
+            
+            // Add routine options
+            availableRoutines.forEach(routine => {
+                const option = this.createRoutineOption(routine, prefix);
+                optionsContainer.appendChild(option);
+            });
+            
+        } catch (error) {
+            console.error('Error loading routines for picker:', error);
+        }
+    }
+    
+    createRoutineOption(routine, prefix) {
+        const div = document.createElement('div');
+        
+        if (!routine) {
+            div.className = 'routine-option group py-1 px-2 cursor-pointer flex items-center space-x-2 bg-gray-50 hover:bg-gray-100 border-l-3 border-gray-300';
+            div.dataset.routineId = '';
+            div.dataset.prefix = prefix;
+            
+            div.innerHTML = `
+                <div class="w-3 h-1.5 bg-gray-300 rounded-sm"></div>
+                <span class="text-xs text-gray-600 font-medium">No routine</span>
+            `;
+        } else {
+            // Get background color for full-width styling
+            let backgroundColor = '';
+            let textColor = '';
+            let borderColor = '';
+            
+            if (routine.color === 'brown') {
+                backgroundColor = 'rgba(232, 216, 207, 0.3)';
+                textColor = '#73513b';
+                borderColor = '#e8d8cf';
+            } else {
+                const colorMap = {
+                    blue: { bg: 'rgba(59, 130, 246, 0.1)', text: '#1e40af', border: '#3b82f6' },
+                    green: { bg: 'rgba(34, 197, 94, 0.1)', text: '#166534', border: '#22c55e' },
+                    purple: { bg: 'rgba(168, 85, 247, 0.1)', text: '#7c3aed', border: '#a855f7' },
+                    orange: { bg: 'rgba(249, 115, 22, 0.1)', text: '#ea580c', border: '#f97316' },
+                    red: { bg: 'rgba(239, 68, 68, 0.1)', text: '#dc2626', border: '#ef4444' },
+                    yellow: { bg: 'rgba(234, 179, 8, 0.1)', text: '#a16207', border: '#eab308' },
+                    pink: { bg: 'rgba(236, 72, 153, 0.1)', text: '#be185d', border: '#ec4899' },
+                    gray: { bg: 'rgba(107, 114, 128, 0.1)', text: '#374151', border: '#6b7280' },
+                    teal: { bg: 'rgba(20, 184, 166, 0.1)', text: '#0f766e', border: '#14b8a6' },
+                    lime: { bg: 'rgba(132, 204, 22, 0.1)', text: '#365314', border: '#84cc16' },
+                    black: { bg: 'rgba(55, 65, 81, 0.1)', text: '#111827', border: '#374151' }
+                };
+                const colors = colorMap[routine.color] || colorMap.blue;
+                backgroundColor = colors.bg;
+                textColor = colors.text;
+                borderColor = colors.border;
+            }
+            
+            div.className = 'routine-option group py-1 px-2 cursor-pointer flex items-center justify-between border-l-3';
+            div.style.backgroundColor = backgroundColor;
+            div.style.borderLeftColor = borderColor;
+            div.dataset.routineId = routine.id;
+            div.dataset.prefix = prefix;
+            
+            div.innerHTML = `
+                <div class="flex items-center space-x-2 flex-1">
+                    <span class="text-sm" style="color: ${textColor}">${routine.icon || '⭐'}</span>
+                    <div class="flex items-center space-x-1.5">
+                        <span class="text-xs font-medium" style="color: ${textColor}">${this.escapeHtml(routine.title)}</span>
+                        ${routine.status === 'paused' ? '<span class="text-xs text-gray-500 bg-white px-1 py-0.5 rounded">▐▐ PAUSED</span>' : ''}
+                    </div>
+                </div>
+                <button class="edit-routine-btn p-1.5 hover:bg-white hover:bg-opacity-100 hover:border hover:border-gray-300 rounded transition-all group/edit flex items-center space-x-1" data-routine-id="${routine.id}" data-prefix="${prefix}">
+                    <span class="text-xs font-medium opacity-0 group-hover/edit:opacity-100 transition-opacity whitespace-nowrap" style="color: ${textColor}">Edit</span>
+                    <i class="fas fa-edit text-sm" style="color: ${textColor}"></i>
+                </button>
+            `;
+        }
+        
+        // Add click handler for routine selection
+        div.addEventListener('click', (e) => {
+            // Don't select if clicking the edit button
+            if (e.target.closest('.edit-routine-btn')) {
+                return;
+            }
+            this.selectRoutineOption(prefix, routine);
+        });
+        
+        // Add click handler for edit button (only for actual routines, not "No routine")
+        if (routine) {
+            const editBtn = div.querySelector('.edit-routine-btn');
+            if (editBtn) {
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    this.openRoutineEdit(routine.id, prefix);
+                });
+            }
+        }
+        
+        return div;
+    }
+    
+    selectRoutineOption(prefix, routine) {
+        const hiddenInput = document.getElementById(`${prefix}-routine`);
+        const displaySpan = document.getElementById(`${prefix}-routine-display`);
+        const picker = document.getElementById(`${prefix}-routine-picker`);
+        
+        // Update hidden input
+        hiddenInput.value = routine ? routine.id : '';
+        
+        // Update display
+        if (!routine) {
+            displaySpan.innerHTML = '<span class="text-gray-500">No routine</span>';
+        } else {
+            // Handle custom brown color for display
+            let colorStyle = '';
+            let colorClass = '';
+            
+            if (routine.color === 'brown') {
+                colorStyle = 'style="background-color: #e8d8cf; color: #73513b;"';
+            } else {
+                const colorMap = {
+                    blue: 'bg-blue-100 text-blue-700',
+                    green: 'bg-green-200 text-green-800',
+                    purple: 'bg-purple-100 text-purple-700',
+                    orange: 'bg-orange-100 text-orange-700',
+                    red: 'bg-red-100 text-red-700',
+                    yellow: 'bg-yellow-100 text-yellow-700',
+                    pink: 'bg-pink-100 text-pink-700',
+                    gray: 'bg-gray-100 text-gray-700',
+                    teal: 'bg-teal-100 text-teal-700',
+                    lime: 'bg-lime-50 text-lime-700',
+                    black: 'bg-gray-800 text-white'
+                };
+                colorClass = colorMap[routine.color] || colorMap.blue;
+            }
+            
+            displaySpan.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <div class="px-2 py-1 rounded text-xs font-medium flex items-center space-x-1 ${colorClass}" ${colorStyle}>
+                        <span>${routine.icon || '⭐'}</span>
+                        <span>${this.escapeHtml(routine.title)}</span>
+                    </div>
+                    ${routine.status === 'paused' ? '<span class="text-xs text-gray-500">▐▐ PAUSED</span>' : ''}
+                </div>
+            `;
+        }
+        
+        // Close picker
+        picker.classList.add('hidden');
+        
+        // Clear search
+        const search = document.getElementById(`${prefix}-routine-search`);
+        if (search) search.value = '';
+    }
+    
+    setupRoutineEditListeners(prefix) {
+        // Back button
+        const backBtn = document.querySelector(`[data-prefix="${prefix}"].routine-edit-back-btn`);
+        if (backBtn) {
+            backBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                this.closeRoutineEdit(prefix);
+            });
+        }
+        
+        // Save button
+        const saveBtn = document.querySelector(`[data-prefix="${prefix}"].routine-edit-save-btn`);
+        if (saveBtn) {
+            saveBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                this.saveRoutineEdit(prefix);
+            });
+        }
+        
+        // Delete button
+        const deleteBtn = document.querySelector(`[data-prefix="${prefix}"].routine-edit-delete-btn`);
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                this.deleteRoutineFromEdit(prefix);
+            });
+        }
+        
+        // Title input Enter key handler
+        const titleInput = document.getElementById(`${prefix}-edit-routine-title`);
+        if (titleInput) {
+            titleInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.saveRoutineEdit(prefix);
+                }
+            });
+        }
+    }
+    
+    setupEditTaskKeyHandlers() {
+        // Only set up once
+        if (this.editTaskKeyHandlersSetup) return;
+        this.editTaskKeyHandlersSetup = true;
+        
+        // Enter key on title field saves the task
+        const editTaskTitle = document.getElementById('edit-task-title');
+        if (editTaskTitle) {
+            editTaskTitle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const form = document.getElementById('edit-task-form');
+                    if (form) {
+                        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    }
+                }
+            });
+        }
+        
+        // Ctrl+Enter in notes field saves the task
+        const editTaskNotes = document.getElementById('edit-task-notes');
+        if (editTaskNotes) {
+            editTaskNotes.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    const form = document.getElementById('edit-task-form');
+                    if (form) {
+                        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    }
+                }
+            });
+        }
+    }
+    
+    setupListItemKeyHandlers(input, formId) {
+        // Add Enter/Ctrl+Enter key support for list item inputs
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || ((e.ctrlKey || e.metaKey) && e.key === 'Enter')) {
+                e.preventDefault();
+                // Submit the form
+                const form = document.getElementById(formId);
+                if (form) {
+                    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                }
+            }
+        });
+    }
+    
+    initializeListSorting(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container || container.dataset.sortingInitialized) return;
+        
+        container.dataset.sortingInitialized = 'true';
+        let draggedElement = null;
+        
+        // Handle drag start - only from drag handle
+        container.addEventListener('dragstart', (e) => {
+            if (e.target.classList.contains('drag-handle') || e.target.closest('.drag-handle')) {
+                const row = e.target.closest('.list-item-row');
+                if (row) {
+                    draggedElement = row;
+                    row.style.opacity = '0.5';
+                    row.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', ''); // Required for drag to work
+                }
+            }
+        });
+        
+        // Handle drag end
+        container.addEventListener('dragend', (e) => {
+            const row = e.target.closest('.list-item-row');
+            if (row) {
+                row.style.opacity = '';
+                row.classList.remove('dragging');
+                draggedElement = null;
+            }
+        });
+        
+        // Handle drag over
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        });
+        
+        // Handle drop
+        container.addEventListener('drop', (e) => {
+            e.preventDefault();
+            
+            if (draggedElement) {
+                const afterElement = this.getDragAfterElement(container, e.clientY);
+                if (afterElement == null) {
+                    container.appendChild(draggedElement);
+                } else {
+                    container.insertBefore(draggedElement, afterElement);
+                }
+                
+                // Update order indices for all items
+                this.updateListItemOrder(containerId);
+            }
+        });
+    }
+    
+    getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.list-item-row:not(.dragging)')];
+        
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+    
+    updateListItemOrder(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        // Add order attribute to all list items based on their current position
+        const listItems = container.querySelectorAll('.list-item-row');
+        listItems.forEach((item, index) => {
+            const input = item.querySelector('input[type="text"]');
+            if (input) {
+                input.dataset.order = index;
+            }
+        });
+    }
+    
+    filterRoutinePicker(prefix, searchTerm) {
+        const optionsContainer = document.getElementById(`${prefix}-routine-options`);
+        if (!optionsContainer) return;
+        
+        const options = optionsContainer.querySelectorAll('.routine-option');
+        const term = searchTerm.toLowerCase().trim();
+        
+        options.forEach(option => {
+            const routineId = option.dataset.routineId;
+            
+            // Always show "No routine" option
+            if (!routineId) {
+                option.style.display = 'flex';
+                return;
+            }
+            
+            const text = option.textContent.toLowerCase();
+            const matches = !term || text.includes(term);
+            option.style.display = matches ? 'flex' : 'none';
+        });
+    }
+    
+    async setRoutinePickerSelection(prefix, routineId) {
+        const hiddenInput = document.getElementById(`${prefix}-routine`);
+        const displaySpan = document.getElementById(`${prefix}-routine-display`);
+        
+        if (!hiddenInput || !displaySpan) return;
+        
+        // Set hidden input value
+        hiddenInput.value = routineId || '';
+        
+        if (!routineId) {
+            // No routine selected
+            displaySpan.innerHTML = '<span class="text-gray-500">No routine</span>';
+            return;
+        }
+        
+        try {
+            // Find the routine from the cache or API
+            let routine = this.routines.find(r => r.id === routineId);
+            if (!routine) {
+                // Fetch routines if not cached
+                const routines = await this.apiCall('/api/routines');
+                routine = routines.find(r => r.id === routineId);
+            }
+            
+            if (routine) {
+                this.selectRoutineOption(prefix, routine);
+            } else {
+                // Routine not found, reset to "No routine"
+                displaySpan.innerHTML = '<span class="text-gray-500">No routine</span>';
+                hiddenInput.value = '';
+            }
+        } catch (error) {
+            console.error('Error setting routine picker selection:', error);
+            displaySpan.innerHTML = '<span class="text-gray-500">No routine</span>';
+            hiddenInput.value = '';
+        }
+    }
+
+    // Routine Inline Editing Methods
+    openRoutineEdit(routineId, prefix) {
+        console.log('Opening routine edit for:', routineId, 'in prefix:', prefix);
+        
+        const routine = this.routines.find(r => r.id === routineId);
+        if (!routine) {
+            console.error('Routine not found:', routineId);
+            return;
+        }
+        
+        // Store current editing state
+        this.currentEditingRoutine = { id: routineId, prefix: prefix };
+        
+        // Hide main picker view and show edit panel
+        const mainView = document.getElementById(`${prefix}-routine-main`);
+        const editView = document.getElementById(`${prefix}-routine-edit`);
+        
+        if (mainView && editView) {
+            mainView.classList.add('hidden');
+            editView.classList.remove('hidden');
+            
+            // Populate edit form
+            this.populateRoutineEditForm(routine, prefix);
+        }
+    }
+    
+    closeRoutineEdit(prefix) {
+        console.log('Closing routine edit for prefix:', prefix);
+        
+        // Show main picker view and hide edit panel
+        const mainView = document.getElementById(`${prefix}-routine-main`);
+        const editView = document.getElementById(`${prefix}-routine-edit`);
+        
+        if (mainView && editView) {
+            mainView.classList.remove('hidden');
+            editView.classList.add('hidden');
+        }
+        
+        // Clear editing state
+        this.currentEditingRoutine = null;
+    }
+    
+    populateRoutineEditForm(routine, prefix) {
+        // Populate title field
+        const titleInput = document.getElementById(`${prefix}-edit-routine-title`);
+        if (titleInput) {
+            titleInput.value = routine.title;
+        }
+        
+        // Populate color picker
+        this.populateColorPicker(routine.color, prefix);
+    }
+    
+    populateColorPicker(selectedColor, prefix) {
+        const colorsContainer = document.getElementById(`${prefix}-edit-routine-colors`);
+        if (!colorsContainer) return;
+        
+        const colors = [
+            { name: 'blue', value: '#3498db' },
+            { name: 'green', value: '#2ecc71' },
+            { name: 'purple', value: '#9b59b6' },
+            { name: 'orange', value: '#e67e22' },
+            { name: 'red', value: '#e74c3c' },
+            { name: 'yellow', value: '#f1c40f' },
+            { name: 'pink', value: '#e91e63' },
+            { name: 'gray', value: '#95a5a6' },
+            { name: 'teal', value: '#1abc9c' },
+            { name: 'lime', value: '#32cd32' },
+            { name: 'brown', value: '#8b4513' },
+            { name: 'black', value: '#2c3e50' }
+        ];
+        
+        colorsContainer.innerHTML = colors.map(color => `
+            <button type="button" 
+                    class="color-picker-btn w-6 h-6 rounded border-2 ${selectedColor === color.name ? 'border-gray-800 scale-110' : 'border-gray-300 hover:border-gray-400'} transition-all"
+                    style="background-color: ${color.value}"
+                    data-color="${color.name}"
+                    data-prefix="${prefix}"
+                    title="${color.name}">
+            </button>
+        `).join('');
+        
+        // Add event listeners to color buttons
+        colorsContainer.querySelectorAll('.color-picker-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const colorName = btn.dataset.color;
+                const prefix = btn.dataset.prefix;
+                this.selectEditColor(colorName, prefix);
+            });
+        });
+    }
+    
+    selectEditColor(colorName, prefix) {
+        // Update the visual selection
+        this.populateColorPicker(colorName, prefix);
+        // Store the selected color for saving
+        this.selectedEditColor = colorName;
+    }
+    
+    async saveRoutineEdit(prefix) {
+        if (!this.currentEditingRoutine) return;
+        
+        const titleInput = document.getElementById(`${prefix}-edit-routine-title`);
+        const newTitle = titleInput?.value?.trim();
+        
+        if (!newTitle) {
+            alert('Please enter a routine title');
+            return;
+        }
+        
+        try {
+            const updateData = {
+                title: newTitle,
+                color: this.selectedEditColor || this.routines.find(r => r.id === this.currentEditingRoutine.id)?.color || 'blue'
+            };
+            
+            console.log('Saving routine edit:', updateData);
+            
+            const updatedRoutine = await this.apiCall(`/api/routines/${this.currentEditingRoutine.id}`, {
+                method: 'PUT',
+                body: JSON.stringify(updateData)
+            });
+            
+            // Update local cache
+            const routineIndex = this.routines.findIndex(r => r.id === this.currentEditingRoutine.id);
+            if (routineIndex !== -1) {
+                this.routines[routineIndex] = updatedRoutine;
+            }
+            
+            // Refresh the picker options
+            this.populateRoutinePicker(prefix);
+            
+            // Close edit panel
+            this.closeRoutineEdit(prefix);
+            
+            // Refresh the board if this routine is displayed
+            this.renderBoard();
+            
+        } catch (error) {
+            console.error('Failed to save routine:', error);
+            alert('Failed to save routine changes');
+        }
+    }
+    
+    async deleteRoutineFromEdit(prefix) {
+        if (!this.currentEditingRoutine) return;
+        
+        const routine = this.routines.find(r => r.id === this.currentEditingRoutine.id);
+        if (!routine) return;
+        
+        if (!confirm(`Are you sure you want to delete the routine "${routine.title}"? This will remove the routine from all tasks.`)) {
+            return;
+        }
+        
+        try {
+            await this.apiCall(`/api/routines/${this.currentEditingRoutine.id}/archive`, {
+                method: 'PUT'
+            });
+            
+            // Remove from local cache
+            this.routines = this.routines.filter(r => r.id !== this.currentEditingRoutine.id);
+            
+            // Refresh the picker options
+            this.populateRoutinePicker(prefix);
+            
+            // Close edit panel
+            this.closeRoutineEdit(prefix);
+            
+            // Refresh the board
+            this.renderBoard();
+            
+        } catch (error) {
+            console.error('Failed to delete routine:', error);
+            alert('Failed to delete routine');
+        }
     }
 
     handleTaskClick(event, task) {
@@ -957,8 +1624,8 @@ class ClioBoardApp {
             modalTitle.innerHTML = `Add Task - <strong>${columnNames[defaultColumn] || 'Today'}</strong>`;
         }
         
-        // Load routine options
-        this.populateRoutineDropdown('task-routine');
+        // Reset routine selection to "No routine"
+        this.setRoutinePickerSelection('task', null);
         
         modal.classList.remove('hidden');
         document.getElementById('task-title').focus();
@@ -967,10 +1634,13 @@ class ClioBoardApp {
     addListItemField(autoFocus = true) {
         const container = document.getElementById('list-items-container');
         const itemDiv = document.createElement('div');
-        itemDiv.className = 'flex items-center space-x-2';
+        itemDiv.className = 'flex items-center space-x-2 list-item-row';
         
         const itemId = `list-item-${Date.now()}`;
         itemDiv.innerHTML = `
+            <div class="drag-handle cursor-move text-gray-400 hover:text-gray-600 px-1" draggable="true" title="Drag to reorder">
+                <i class="fas fa-grip-vertical text-xs"></i>
+            </div>
             <input type="text" 
                    id="${itemId}"
                    class="flex-1 px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm list-item-input"
@@ -1003,7 +1673,7 @@ class ClioBoardApp {
             previousValue = input.value;
         });
         
-        // Handle tab navigation
+        // Handle tab navigation and form submission
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Tab' && !e.shiftKey) {
                 e.preventDefault();
@@ -1018,6 +1688,12 @@ class ClioBoardApp {
                 }
             }
         });
+        
+        // Add universal key handlers for form submission
+        this.setupListItemKeyHandlers(input, 'add-task-form');
+        
+        // Initialize drag/drop on container if not already done
+        this.initializeListSorting('list-items-container');
         
         if (autoFocus) {
             input.focus();
@@ -1055,45 +1731,6 @@ class ClioBoardApp {
         return inputs[currentIndex + 1] || null;
     }
 
-    async populateRoutineDropdown(selectElementId, selectedRoutineId = null) {
-        try {
-            const select = document.getElementById(selectElementId);
-            if (!select) return;
-            
-            // Clear existing options except "No routine"
-            select.innerHTML = '<option value="">No routine</option>';
-            
-            // Get active and paused routines (exclude completed and archived)
-            const routines = await this.apiCall('/api/routines');
-            const availableRoutines = routines.filter(routine => 
-                !routine.is_archived && 
-                (routine.status === 'active' || routine.status === 'paused')
-            );
-            
-            availableRoutines.forEach(routine => {
-                const option = document.createElement('option');
-                option.value = routine.id;
-                
-                // Create option text with icon and name
-                const icon = routine.icon || '⭐';
-                option.textContent = `${icon} ${routine.title}`;
-                
-                // Set style for the option (though this is limited in select elements)
-                if (routine.color && routine.color.startsWith('#')) {
-                    option.style.color = routine.color;
-                }
-                
-                // Mark as selected if this is the current routine
-                if (selectedRoutineId && routine.id === selectedRoutineId) {
-                    option.selected = true;
-                }
-                
-                select.appendChild(option);
-            });
-        } catch (error) {
-            console.error('Error loading routines for dropdown:', error);
-        }
-    }
 
     closeAddTaskModal() {
         const modal = document.getElementById('add-task-modal');
@@ -1165,8 +1802,13 @@ class ClioBoardApp {
         // Load list items if it's a list
         this.loadEditListItems(task);
         
-        // Load routine options and set current selection
-        this.populateRoutineDropdown('edit-task-routine', task.routine_id);
+        // Initialize list sorting for edit modal AFTER items are loaded
+        setTimeout(() => {
+            this.initializeListSorting('edit-list-items-container');
+        }, 10);
+        
+        // Set current routine selection for the picker
+        this.setRoutinePickerSelection('edit-task', task.routine_id);
         
         modal.classList.remove('hidden');
         document.getElementById('edit-task-title').focus();
@@ -1404,7 +2046,17 @@ class ClioBoardApp {
         container.innerHTML = '';
         
         if (task.items && task.items.length > 0) {
-            task.items.forEach(item => {
+            // Sort items by position, falling back to id for stable ordering
+            const sortedItems = [...task.items].sort((a, b) => {
+                const positionA = a.position !== undefined ? a.position : 999999;
+                const positionB = b.position !== undefined ? b.position : 999999;
+                if (positionA === positionB) {
+                    return a.id - b.id; // Fallback to id for stable ordering
+                }
+                return positionA - positionB;
+            });
+            
+            sortedItems.forEach(item => {
                 this.addEditListItemField(item);
             });
         }
@@ -1416,13 +2068,16 @@ class ClioBoardApp {
     addEditListItemField(existingItem = null, autoFocus = true) {
         const container = document.getElementById('edit-list-items-container');
         const itemDiv = document.createElement('div');
-        itemDiv.className = 'flex items-center space-x-2';
+        itemDiv.className = 'flex items-center space-x-2 list-item-row';
         
         const itemId = existingItem ? existingItem.id : `new-item-${Date.now()}`;
         const isCompleted = existingItem ? existingItem.completed : false;
         const itemTitle = existingItem ? existingItem.title : '';
         
         itemDiv.innerHTML = `
+            <div class="drag-handle cursor-move text-gray-400 hover:text-gray-600 px-1" draggable="true" title="Drag to reorder">
+                <i class="fas fa-grip-vertical text-xs"></i>
+            </div>
             <input type="checkbox" ${isCompleted ? 'checked' : ''} 
                    class="w-4 h-4 text-green-600"
                    data-item-id="${itemId}"
@@ -1462,7 +2117,7 @@ class ClioBoardApp {
                 previousValue = input.value;
             });
             
-            // Handle tab navigation
+            // Handle tab navigation and form submission
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Tab' && !e.shiftKey) {
                     e.preventDefault();
@@ -1482,6 +2137,12 @@ class ClioBoardApp {
                 input.focus();
             }
         }
+        
+        // Add universal key handlers for form submission (for ALL items)
+        this.setupListItemKeyHandlers(input, 'edit-task-form');
+        
+        // Initialize drag/drop on container if not already done
+        this.initializeListSorting('edit-list-items-container');
         
         return input;
     }
@@ -1516,6 +2177,7 @@ class ClioBoardApp {
             for (const input of itemInputs) {
                 const itemId = input.dataset.itemId;
                 const itemTitle = input.value.trim();
+                const position = parseInt(input.dataset.order) || 0;
                 const checkbox = input.parentElement.querySelector('input[type="checkbox"]');
                 const isCompleted = checkbox.checked;
                 
@@ -1524,7 +2186,10 @@ class ClioBoardApp {
                         // Add new item
                         await this.apiCall(`/api/tasks/${this.editingTask.id}/items`, {
                             method: 'POST',
-                            body: JSON.stringify({ title: itemTitle })
+                            body: JSON.stringify({ 
+                                title: itemTitle,
+                                position: position
+                            })
                         });
                     } else {
                         // Update existing item
@@ -1532,7 +2197,8 @@ class ClioBoardApp {
                             method: 'PUT',
                             body: JSON.stringify({ 
                                 title: itemTitle,
-                                completed: isCompleted 
+                                completed: isCompleted,
+                                position: position
                             })
                         });
                     }

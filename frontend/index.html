@@ -292,33 +292,70 @@
 
     <!-- Add Task Modal -->
     <div id="add-task-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div class="bg-white rounded-lg p-6 w-full max-w-xl mx-4 max-h-[90vh] flex flex-col">
             <div class="flex justify-between items-center mb-4">
                 <h3 id="modal-title" class="text-lg font-semibold">Add New Task</h3>
                 <button id="close-modal-x" class="text-gray-400 hover:text-gray-600">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <form id="add-task-form">
-                <div class="space-y-4">
+            <form id="add-task-form" class="flex flex-col flex-1 min-h-0">
+                <div class="space-y-4 overflow-y-auto flex-1 pl-2 pr-6">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                         <input type="text" id="task-title" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
+                    
+                    <!-- Routine Assignment -->
+                    <div class="relative">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Routine</label>
+                        <button type="button" id="task-routine-btn" class="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-left flex items-center justify-between hover:border-gray-400 text-sm">
+                            <span id="task-routine-display" class="text-gray-500">No routine</span>
+                            <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                        </button>
+                        <div id="task-routine-picker" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 hidden max-h-96 overflow-hidden">
+                            <!-- Main picker view -->
+                            <div id="task-routine-main" class="routine-picker-main">
+                                <div class="p-2 border-b border-gray-100">
+                                    <input type="text" id="task-routine-search" placeholder="Search routines..." class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                </div>
+                                <div id="task-routine-options" class="max-h-80 overflow-y-auto">
+                                    <!-- Routine options will be populated here -->
+                                </div>
+                            </div>
+                            
+                            <!-- Edit panel (hidden by default) -->
+                            <div id="task-routine-edit" class="routine-picker-edit hidden">
+                                <div class="p-3 border-b border-gray-100 flex items-center space-x-2">
+                                    <button class="routine-edit-back-btn text-gray-400 hover:text-gray-600" data-prefix="task">
+                                        <i class="fas fa-arrow-left text-sm"></i>
+                                    </button>
+                                    <span class="text-sm font-medium">Edit Routine</span>
+                                </div>
+                                <div class="p-3 space-y-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Title</label>
+                                        <input type="text" id="task-edit-routine-title" class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Color</label>
+                                        <div id="task-edit-routine-colors" class="grid grid-cols-6 gap-1">
+                                            <!-- Color options will be populated here -->
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-between items-center pt-2">
+                                        <button class="routine-edit-delete-btn text-xs text-red-600 hover:text-red-700" data-prefix="task">Delete</button>
+                                        <button class="routine-edit-save-btn px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700" data-prefix="task">Save</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="task-routine" value="">
+                    </div>
+                    
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                         <textarea id="task-notes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                    </div>
-                    
-                    <!-- Routine Assignment -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            <i class="fas fa-folder mr-1"></i>Assign to Routine
-                        </label>
-                        <select id="task-routine" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">No routine</option>
-                            <!-- Routine options will be populated dynamically -->
-                        </select>
                     </div>
                     
                     <!-- Hidden column field - automatically set based on which + button was clicked -->
@@ -339,7 +376,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="flex justify-between items-center mt-6">
+                <div class="flex justify-between items-center mt-6 flex-shrink-0 border-t pt-4">
                     <div class="flex items-center space-x-2 relative">
                         <button type="button" id="due-date-btn" class="flex items-center space-x-1 px-2 py-1 text-sm text-gray-600 border border-gray-300 rounded-md hover:border-gray-400 hover:bg-gray-50">
                             <i class="fas fa-calendar text-xs"></i>
@@ -358,42 +395,78 @@
 
     <!-- Edit Task Modal -->
     <div id="edit-task-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div class="bg-white rounded-lg p-6 w-full max-w-xl mx-4 max-h-[90vh] flex flex-col">
             <div class="flex justify-between items-center mb-4">
                 <h3 id="edit-modal-title" class="text-lg font-semibold">Edit Task</h3>
                 <button id="close-edit-modal-x" class="text-gray-400 hover:text-gray-600">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <form id="edit-task-form">
-                <div class="space-y-4">
+            <form id="edit-task-form" class="flex flex-col flex-1 min-h-0">
+                <div class="space-y-4 overflow-y-auto flex-1 pl-2 pr-6">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                         <input type="text" id="edit-task-title" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                     
-                    <!-- Task Completion Checkbox -->
-                    <div class="flex items-center space-x-2">
-                        <button type="button" id="edit-task-complete-btn" class="w-5 h-5 rounded border-2 flex items-center justify-center hover:border-green-500 transition-all border-gray-300">
-                            <i class="fas fa-check text-white text-xs hidden" id="edit-complete-check"></i>
-                        </button>
-                        <label class="text-sm text-gray-700 cursor-pointer" id="edit-complete-label">Mark as completed</label>
+                    <!-- Task Completion and Routine Assignment Row -->
+                    <div class="flex items-center justify-between space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <button type="button" id="edit-task-complete-btn" class="w-5 h-5 rounded border-2 flex items-center justify-center hover:border-green-500 transition-all border-gray-300">
+                                <i class="fas fa-check text-white text-xs hidden" id="edit-complete-check"></i>
+                            </button>
+                            <label class="text-sm text-gray-700 cursor-pointer" id="edit-complete-label">Mark Complete</label>
+                        </div>
+                        
+                        <div class="flex-1 relative">
+                            <button type="button" id="edit-task-routine-btn" class="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-left flex items-center justify-between hover:border-gray-400 text-sm">
+                                <span id="edit-task-routine-display" class="text-gray-500">No routine</span>
+                                <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                            </button>
+                            <div id="edit-task-routine-picker" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 hidden max-h-96 overflow-hidden">
+                                <!-- Main picker view -->
+                                <div id="edit-task-routine-main" class="routine-picker-main">
+                                    <div class="p-2 border-b border-gray-100">
+                                        <input type="text" id="edit-task-routine-search" placeholder="Search routines..." class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    </div>
+                                    <div id="edit-task-routine-options" class="max-h-80 overflow-y-auto">
+                                        <!-- Routine options will be populated here -->
+                                    </div>
+                                </div>
+                                
+                                <!-- Edit panel (hidden by default) -->
+                                <div id="edit-task-routine-edit" class="routine-picker-edit hidden">
+                                    <div class="p-3 border-b border-gray-100 flex items-center space-x-2">
+                                        <button class="routine-edit-back-btn text-gray-400 hover:text-gray-600" data-prefix="edit-task">
+                                            <i class="fas fa-arrow-left text-sm"></i>
+                                        </button>
+                                        <span class="text-sm font-medium">Edit Routine</span>
+                                    </div>
+                                    <div class="p-3 space-y-3">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-700 mb-1">Title</label>
+                                            <input type="text" id="edit-task-edit-routine-title" class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-700 mb-1">Color</label>
+                                            <div id="edit-task-edit-routine-colors" class="grid grid-cols-6 gap-1">
+                                                <!-- Color options will be populated here -->
+                                            </div>
+                                        </div>
+                                        <div class="flex justify-between items-center pt-2">
+                                            <button class="routine-edit-delete-btn text-xs text-red-600 hover:text-red-700" data-prefix="edit-task">Delete</button>
+                                            <button class="routine-edit-save-btn px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700" data-prefix="edit-task">Save</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="edit-task-routine" value="">
                     </div>
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                         <textarea id="edit-task-notes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                    </div>
-                    
-                    <!-- Routine Assignment -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            <i class="fas fa-folder mr-1"></i>Assign to Routine
-                        </label>
-                        <select id="edit-task-routine" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">No routine</option>
-                            <!-- Routine options will be populated dynamically -->
-                        </select>
                     </div>
                     
                     <!-- List Items for editing -->
@@ -411,7 +484,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="flex justify-between items-center mt-6">
+                <div class="flex justify-between items-center mt-6 flex-shrink-0 border-t pt-4">
                     <div class="flex items-center space-x-2 relative">
                         <button type="button" id="edit-due-date-btn" class="flex items-center space-x-1 px-2 py-1 text-sm text-gray-600 border border-gray-300 rounded-md hover:border-gray-400 hover:bg-gray-50">
                             <i class="fas fa-calendar text-xs"></i>

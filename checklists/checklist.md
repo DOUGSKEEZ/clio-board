@@ -117,9 +117,15 @@
 - [x] **Routine card reordering** - drag-and-drop functionality with backend persistence
 - [x] **Mini-board modal** - click routine tag → see all tasks for that routine
 
+### ✅ ENHANCED UI/UX FEATURES 
+- [x] **Enhanced routine picker** - Trello-style dropdown with inline editing, color swatches, and search
+- [x] **List item reordering** - complete drag/drop system with visual handles and database persistence
+- [x] **Modal improvements** - responsive layouts, proper scrolling, keyboard shortcuts (Enter/Ctrl+Enter)
+- [x] **UI consistency** - truncated list items, improved focus management, better spacing
+- [x] **Real-time updates** - changes reflect immediately between edit modal and main dashboard
+
 ### 📋 REMAINING PHASE 2 FEATURES
-- [ ] **Enhanced routine picker** - Trello-style dropdown with search, color-coded cards (replacing basic HTML select)
-- [ ] **List item reordering** - drag to reorder items within lists
+- [ ] **Note Board Module** - 4-column scratch area implementation (MAJOR MISSING MODULE)
 
 ## Phase 2.5: Note Board Module 📋 PLANNED
 - [ ] **Note Board** - 4-column scratch area (MAJOR MISSING MODULE - implement before Phase 3)
