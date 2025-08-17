@@ -117,27 +117,48 @@
 - [x] **Routine card reordering** - drag-and-drop functionality with backend persistence
 - [x] **Mini-board modal** - click routine tag → see all tasks for that routine
 
-### ✅ ENHANCED UI/UX FEATURES 
-- [x] **Enhanced routine picker** - Trello-style dropdown with inline editing, color swatches, and search
-- [x] **List item reordering** - complete drag/drop system with visual handles and database persistence
-- [x] **Modal improvements** - responsive layouts, proper scrolling, keyboard shortcuts (Enter/Ctrl+Enter)
-- [x] **UI consistency** - truncated list items, improved focus management, better spacing
-- [x] **Real-time updates** - changes reflect immediately between edit modal and main dashboard
-
 ### 📋 REMAINING PHASE 2 FEATURES
-- [ ] **Note Board Module** - 4-column scratch area implementation (MAJOR MISSING MODULE)
+- [x] **Enhanced routine picker** - Trello-style dropdown with search, color-coded cards (replacing basic HTML select)
+- [x] **List item reordering** - drag to reorder items within lists
 
-## Phase 2.5: Note Board Module 📋 PLANNED
-- [ ] **Note Board** - 4-column scratch area (MAJOR MISSING MODULE - implement before Phase 3)
+## Phase 3: Note Board Module 📋 PLANNED
+- [ ] **Note Board UI** - 4-column scratch area (User Notes Col 1-2, Agent Notes Col 3-4)
+- [ ] **Note creation** - Click to add note blobs in any column
+- [ ] **Note types** - User thoughts/voice transcripts vs Agent observations/mentoring
+- [ ] **Note editing** - Click to edit existing note content
+- [ ] **Note drag-and-drop** - Move notes between the 4 columns
+- [ ] **Note-to-task conversion** - Convert any note into a task on main board
+- [ ] **Note archiving** - "Save note" action moves to Key West "Aquarium" directory
+- [ ] **Note deletion** - "Delete note" removes from context entirely
+- [ ] **Agent integration** - API endpoints for agent to create observations/patterns
 
-## Phase 3: Polish & Enhancement 📋 PLANNED
-- [ ] **Font & spacing optimization** - Fine-tune typography and space utilization
-- [ ] **Self-host assets** - Download and serve Tailwind CSS, Font Awesome, SortableJS locally (with custom brown colors in Tailwind config)
-- [ ] Add agent rate limiting (express-rate-limit ~10 lines)
-- [ ] Remove orphan task indicators from dashboard (space saving)
-- [ ] Mobile responsive design
-- [ ] Performance optimizations
-- [ ] Additional UX improvements
+## Phase 4: Polish & Enhancement 🎨 IN PROGRESS (~50-60% COMPLETE)
+
+### ✅ CELEBRATION ANIMATIONS 
+- [x] **Confetti celebrations** - Canvas-confetti library with CSP configuration
+- [x] **Task completion confetti** - Small green bursts for task checkboxes
+- [x] **BIG routine celebration** - Multi-wave confetti explosion for routine completion
+
+### ✅ GHOST CARDS & UX IMPROVEMENTS
+- [x] **Ghost cards** - "Add task" cards that stay at bottom during drag-and-drop
+- [x] **Smart positioning** - Always anchored at column bottom with hover effects
+
+### ✅ SMART DATE INDICATORS
+- [x] **Dynamic headers** - Day names + intelligent This Week/Next Week logic
+- [x] **Weekend detection** - Automatically switches on Saturday/Sunday
+
+### ✅ PERFORMANCE OPTIMIZATIONS
+- [x] **Optimistic UI** - Instant checkbox feedback with bulletproof error recovery
+- [x] **Double-click protection** - Race condition prevention with AbortController
+- [x] **Eliminated blinking** - Fixed task title flicker on list item changes
+
+### 📋 REMAINING POLISH FEATURES
+- [ ] **Font & spacing optimization** - Typography improvements and space utilization
+- [ ] **Self-host assets** - Local Tailwind CSS, Font Awesome, SortableJS with custom colors
+- [ ] **Mobile responsive design** - Tablet/phone optimized layouts
+- [ ] **Agent rate limiting** - Express middleware (~10 lines)
+- [ ] **Performance tuning** - Bundle size reduction, render optimizations
+- [ ] **Additional UX polish** - Micro-interactions and visual refinements
 
 ## Phase 4: Advanced Features 🔮 FUTURE
 - [ ] WebSocket real-time updates 
@@ -146,3 +167,9 @@
 - [ ] Undo/redo system
 - [ ] Backup/export functionality
 - [ ] Keyboard shortcuts
+
+##   Potential Quick Wins (from cursory code review Aug 15 for app.js monolith):
+  1. Error boundaries - Wrap more operations in try/catch blocks. Network calls fail randomly
+  2. Debouncing - Add delays to search/filter operations to avoid excessive renders
+  3. Constants - Pull out magic strings like 'routineTagsMinimized' to top-level constants
+  4. Event delegation - Instead of attaching listeners to every task card, use one listener on the parent

@@ -13,6 +13,8 @@ class ClioBoardApp {
         this.routineTagsMinimized = localStorage.getItem('routineTagsMinimized') === 'true'; // Global toggle for all routine tags (Trello-style)
         this.currentView = 'tasks'; // Track current view
         this.currentRoutine = null; // Track current routine for detail view
+        this.pendingToggles = new Set(); // Track tasks with pending completion toggles
+        this.abortControllers = new Map(); // Track API requests for cancellation
         
         console.log('🏗️ Constructor complete, calling init()');
         this.init();
@@ -141,6 +143,7 @@ class ClioBoardApp {
         });
         
         this.updateTaskCounts();
+        this.updateColumnDateIndicators();
     }
 
     renderColumn(column) {
@@ -158,6 +161,20 @@ class ClioBoardApp {
             const taskElement = this.createTaskCard(task);
             container.appendChild(taskElement);
         });
+        
+        // Add ghost "Add Task" card at the bottom (inside the container for proper spacing)
+        const addCard = document.createElement('div');
+        addCard.className = 'add-task-ghost-card group bg-transparent border-2 border-dashed border-gray-300 border-opacity-50 rounded-lg p-2 hover:border-opacity-100 hover:border-blue-400 hover:bg-blue-50 hover:bg-opacity-60 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center text-gray-400 hover:text-blue-500 min-h-[40px]';
+        addCard.innerHTML = `
+            <i class="fas fa-plus text-sm transition-transform duration-200 group-hover:scale-150"></i>
+        `;
+        
+        // Add click handler to open add task modal with this column pre-selected
+        addCard.addEventListener('click', () => {
+            this.openAddTaskModal(column);
+        });
+        
+        container.appendChild(addCard);
     }
 
     createTaskCard(task) {
@@ -227,7 +244,36 @@ class ClioBoardApp {
         if (completeBtn) {
             completeBtn.addEventListener('click', (e) => {
                 e.stopPropagation(); // Prevent task edit modal
-                this.handleTaskToggle(task.id, task.status === 'completed' ? 'pending' : 'completed');
+                
+                // Double-click protection - ignore if already pending
+                if (this.pendingToggles.has(task.id)) {
+                    console.log(`⏳ Ignoring click on ${task.id} - already pending`);
+                    return;
+                }
+                
+                const newStatus = task.status === 'completed' ? 'pending' : 'completed';
+                
+                // Mark as pending to prevent double-clicks
+                this.pendingToggles.add(task.id);
+                
+                // Cancel any existing request for this task
+                const existingController = this.abortControllers.get(task.id);
+                if (existingController) {
+                    existingController.abort();
+                }
+                
+                // Optimistic UI - update immediately
+                const oldStatus = task.status;
+                task.status = newStatus;
+                this.updateTaskCardCompletionUI(div, newStatus);
+                
+                // Trigger confetti animation if completing the task
+                if (newStatus === 'completed') {
+                    this.triggerTaskCompletionConfetti(completeBtn);
+                }
+                
+                // Handle the toggle with error recovery
+                this.handleTaskToggleOptimistic(task.id, newStatus, oldStatus, div);
             });
         }
 
@@ -623,6 +669,89 @@ class ClioBoardApp {
         console.log(`🔄 Reset routine picker '${prefix}' to main view`);
     }
 
+    triggerTaskCompletionConfetti(button) {
+        // Get button position for confetti origin
+        const rect = button.getBoundingClientRect();
+        const x = (rect.left + rect.width / 2) / window.innerWidth;
+        const y = (rect.top + rect.height / 2) / window.innerHeight;
+        
+        // Small, localized confetti burst
+        confetti({
+            particleCount: 20,
+            spread: 40,
+            origin: { x, y },
+            colors: ['#10b981', '#059669', '#34d399'], // Green theme
+            scalar: 0.8, // Smaller particles
+            gravity: 1.2, // Falls a bit faster
+            drift: 0, // No wind effect
+            ticks: 120 // Shorter duration
+        });
+    }
+
+    triggerRoutineCompletionCelebration() {
+        // BIG CELEBRATION! Multiple waves of confetti
+        const celebrationColors = [
+            '#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', 
+            '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE'
+        ];
+
+        // First wave - center burst
+        confetti({
+            particleCount: 100,
+            spread: 120,
+            origin: { x: 0.5, y: 0.6 },
+            colors: celebrationColors,
+            scalar: 1.2,
+            gravity: 0.8,
+            drift: 0,
+            ticks: 200
+        });
+
+        // Second wave - left side after 200ms
+        setTimeout(() => {
+            confetti({
+                particleCount: 80,
+                spread: 100,
+                origin: { x: 0.1, y: 0.7 },
+                colors: celebrationColors,
+                scalar: 1.0,
+                gravity: 0.9,
+                drift: 1,
+                ticks: 180
+            });
+        }, 200);
+
+        // Third wave - right side after 400ms
+        setTimeout(() => {
+            confetti({
+                particleCount: 80,
+                spread: 100,
+                origin: { x: 0.9, y: 0.7 },
+                colors: celebrationColors,
+                scalar: 1.0,
+                gravity: 0.9,
+                drift: -1,
+                ticks: 180
+            });
+        }, 400);
+
+        // Final celebration - top center after 600ms
+        setTimeout(() => {
+            confetti({
+                particleCount: 60,
+                spread: 80,
+                origin: { x: 0.5, y: 0.3 },
+                colors: celebrationColors,
+                scalar: 0.9,
+                gravity: 1.0,
+                drift: 0,
+                ticks: 150
+            });
+        }, 600);
+
+        console.log('🎊 BIG ROUTINE COMPLETION CELEBRATION! 🎉');
+    }
+
     // Trello-style routine tag toggle functionality
     toggleRoutineTagsDisplay() {
         this.routineTagsMinimized = !this.routineTagsMinimized;
@@ -658,6 +787,140 @@ class ClioBoardApp {
                 countElement.textContent = count;
             }
         });
+    }
+
+    updateColumnDateIndicators() {
+        const now = new Date();
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        
+        // Update Today column - wrap date and + button together
+        const todayColumn = document.querySelector('[data-column="today"]');
+        if (todayColumn) {
+            const headerDiv = todayColumn.querySelector('.flex.items-center.justify-between');
+            const plusButton = headerDiv.querySelector('button');
+            const dayName = dayNames[now.getDay()];
+            
+            // Check if we already have a wrapper
+            let rightWrapper = headerDiv.querySelector('.date-plus-wrapper');
+            if (!rightWrapper) {
+                // Create wrapper for date + button
+                rightWrapper = document.createElement('div');
+                rightWrapper.className = 'date-plus-wrapper flex items-center';
+                
+                // Create date span
+                const dateSpan = document.createElement('span');
+                dateSpan.className = 'date-indicator text-xs text-gray-400 mr-2';
+                
+                // Move plus button into wrapper
+                headerDiv.removeChild(plusButton);
+                rightWrapper.appendChild(dateSpan);
+                rightWrapper.appendChild(plusButton);
+                headerDiv.appendChild(rightWrapper);
+            }
+            
+            // Update the date text
+            const dateSpan = rightWrapper.querySelector('.date-indicator');
+            dateSpan.textContent = dayName;
+        }
+        
+        // Update Tomorrow column
+        const tomorrowColumn = document.querySelector('[data-column="tomorrow"]');
+        if (tomorrowColumn) {
+            const headerDiv = tomorrowColumn.querySelector('.flex.items-center.justify-between');
+            const plusButton = headerDiv.querySelector('button');
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const dayName = dayNames[tomorrow.getDay()];
+            
+            let rightWrapper = headerDiv.querySelector('.date-plus-wrapper');
+            if (!rightWrapper) {
+                rightWrapper = document.createElement('div');
+                rightWrapper.className = 'date-plus-wrapper flex items-center';
+                const dateSpan = document.createElement('span');
+                dateSpan.className = 'date-indicator text-xs text-gray-400 mr-2';
+                headerDiv.removeChild(plusButton);
+                rightWrapper.appendChild(dateSpan);
+                rightWrapper.appendChild(plusButton);
+                headerDiv.appendChild(rightWrapper);
+            }
+            
+            const dateSpan = rightWrapper.querySelector('.date-indicator');
+            dateSpan.textContent = dayName;
+        }
+        
+        // Update This Week/Next Week column
+        const weekColumn = document.querySelector('[data-column="this_week"]');
+        if (weekColumn) {
+            const headerDiv = weekColumn.querySelector('.flex.items-center.justify-between');
+            const plusButton = headerDiv.querySelector('button');
+            const weekHeader = weekColumn.querySelector('h2');
+            const dayOfWeek = now.getDay();
+            // If it's Saturday (6) or Sunday (0), show "Next Week"
+            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+            
+            let dateRange;
+            if (isWeekend) {
+                weekHeader.firstChild.textContent = 'Next Week';
+                
+                // Calculate next week's date range (Monday to Sunday)
+                const nextMonday = new Date(now);
+                const daysToMonday = dayOfWeek === 0 ? 1 : 2; // Sunday needs 1 day, Saturday needs 2
+                nextMonday.setDate(nextMonday.getDate() + daysToMonday);
+                
+                const nextSunday = new Date(nextMonday);
+                nextSunday.setDate(nextSunday.getDate() + 6);
+                
+                dateRange = `${nextMonday.getMonth() + 1}/${nextMonday.getDate()}-${nextSunday.getMonth() + 1}/${nextSunday.getDate()}`;
+            } else {
+                weekHeader.firstChild.textContent = 'This Week';
+                
+                // Calculate this week's date range (Monday to Sunday)
+                const monday = new Date(now);
+                monday.setDate(monday.getDate() - (dayOfWeek - 1)); // Go back to Monday
+                
+                const sunday = new Date(monday);
+                sunday.setDate(sunday.getDate() + 6);
+                
+                dateRange = `${monday.getMonth() + 1}/${monday.getDate()}-${sunday.getMonth() + 1}/${sunday.getDate()}`;
+            }
+            
+            let rightWrapper = headerDiv.querySelector('.date-plus-wrapper');
+            if (!rightWrapper) {
+                rightWrapper = document.createElement('div');
+                rightWrapper.className = 'date-plus-wrapper flex items-center';
+                const dateSpan = document.createElement('span');
+                dateSpan.className = 'date-indicator text-xs text-gray-400 mr-2';
+                headerDiv.removeChild(plusButton);
+                rightWrapper.appendChild(dateSpan);
+                rightWrapper.appendChild(plusButton);
+                headerDiv.appendChild(rightWrapper);
+            }
+            
+            const dateSpan = rightWrapper.querySelector('.date-indicator');
+            dateSpan.textContent = dateRange;
+        }
+        
+        // Update Horizon column
+        const horizonColumn = document.querySelector('[data-column="horizon"]');
+        if (horizonColumn) {
+            const headerDiv = horizonColumn.querySelector('.flex.items-center.justify-between');
+            const plusButton = headerDiv.querySelector('button');
+            
+            let rightWrapper = headerDiv.querySelector('.date-plus-wrapper');
+            if (!rightWrapper) {
+                rightWrapper = document.createElement('div');
+                rightWrapper.className = 'date-plus-wrapper flex items-center';
+                const dateSpan = document.createElement('span');
+                dateSpan.className = 'date-indicator text-xs text-gray-400 mr-2';
+                headerDiv.removeChild(plusButton);
+                rightWrapper.appendChild(dateSpan);
+                rightWrapper.appendChild(plusButton);
+                headerDiv.appendChild(rightWrapper);
+            }
+            
+            const dateSpan = rightWrapper.querySelector('.date-indicator');
+            dateSpan.textContent = 'Future';
+        }
     }
 
     // Event Handlers
@@ -849,12 +1112,26 @@ class ClioBoardApp {
         
         if (editCompleteBtn) {
             editCompleteBtn.addEventListener('click', () => {
+                // Double-click protection for modal too
+                if (this.pendingToggles.has(this.editingTask.id)) {
+                    console.log(`⏳ Ignoring modal click - already pending`);
+                    return;
+                }
+                
                 const newStatus = this.editingTask.status === 'completed' ? 'pending' : 'completed';
-                this.handleTaskToggle(this.editingTask.id, newStatus);
-                // Update the editing task status so UI updates immediately
+                const oldStatus = this.editingTask.status;
+                
+                // Optimistic UI update
                 this.editingTask.status = newStatus;
-                // Update the modal UI
                 this.updateEditModalCompletionUI(newStatus);
+                
+                // Trigger confetti animation if completing the task
+                if (newStatus === 'completed') {
+                    this.triggerTaskCompletionConfetti(editCompleteBtn);
+                }
+                
+                // Use optimistic handler (will also update task cards in background)
+                this.handleTaskToggleOptimisticModal(this.editingTask.id, newStatus, oldStatus);
             });
             
             // Make label clickable too
@@ -1795,15 +2072,88 @@ class ClioBoardApp {
         this.openEditTaskModal(task);
     }
 
+    updateListItemCount(taskId) {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (!task || !task.list_items) return;
+        
+        const completed = task.list_items.filter(item => item.completed).length;
+        const total = task.list_items.length;
+        
+        // Find the count display element for this task
+        const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (taskCard) {
+            // Look for the span containing the list icon and count
+            const countSpan = taskCard.querySelector('span .fa-list')?.parentElement;
+            if (countSpan) {
+                countSpan.innerHTML = `<i class="fas fa-list mr-1"></i>${completed}/${total}`;
+            }
+        }
+    }
+
+    updateTaskCardCompletionUI(taskCard, newStatus) {
+        const completeBtn = taskCard.querySelector ? taskCard.querySelector('.task-complete-btn') : taskCard;
+        const taskTitle = taskCard.querySelector ? taskCard.querySelector('h3') : taskCard.closest('.task-card')?.querySelector('h3');
+        
+        if (completeBtn) {
+            if (newStatus === 'completed') {
+                // Update button appearance for completed state
+                completeBtn.classList.remove('opacity-0', 'group-hover:opacity-100', 'border-gray-300');
+                completeBtn.classList.add('opacity-100', 'bg-green-500', 'border-green-500');
+                completeBtn.innerHTML = '<i class="fas fa-check text-white text-xs"></i>';
+            } else {
+                // Update button appearance for pending state
+                completeBtn.classList.remove('opacity-100', 'bg-green-500', 'border-green-500');
+                completeBtn.classList.add('opacity-0', 'group-hover:opacity-100', 'border-gray-300');
+                completeBtn.innerHTML = '';
+            }
+        }
+        
+        if (taskTitle) {
+            if (newStatus === 'completed') {
+                taskTitle.classList.add('text-gray-500', 'line-through');
+                taskTitle.classList.remove('text-gray-900');
+            } else {
+                taskTitle.classList.remove('text-gray-500', 'line-through');
+                taskTitle.classList.add('text-gray-900');
+            }
+        }
+    }
+
     async handleItemToggle(event, taskId, itemId) {
         event.stopPropagation();
         const completed = event.target.checked;
+        const checkbox = event.target;
+        const listItem = checkbox.closest('.flex');
         
         try {
             await this.toggleItemComplete(taskId, itemId, completed);
-            // Refresh the specific task's data
-            await this.loadTasks();
-            this.renderBoard();
+            
+            // Update just this list item's appearance without re-rendering
+            if (listItem) {
+                const textSpan = listItem.querySelector('span');
+                if (textSpan) {
+                    if (completed) {
+                        textSpan.classList.add('line-through', 'text-gray-500');
+                        textSpan.classList.remove('text-gray-700');
+                    } else {
+                        textSpan.classList.remove('line-through', 'text-gray-500');
+                        textSpan.classList.add('text-gray-700');
+                    }
+                }
+            }
+            
+            // Update the task's list_items in memory
+            const task = this.tasks.find(t => t.id === taskId);
+            if (task && task.list_items) {
+                const item = task.list_items.find(i => i.id === itemId);
+                if (item) {
+                    item.completed = completed;
+                }
+            }
+            
+            // Update the list count display without full re-render
+            this.updateListItemCount(taskId);
+            
         } catch (error) {
             console.error('Failed to toggle item:', error);
             // Revert checkbox state
@@ -1827,6 +2177,112 @@ class ClioBoardApp {
         } catch (error) {
             console.error('Failed to toggle task completion:', error);
             this.showError('Failed to update task');
+        }
+    }
+
+    async handleTaskToggleOptimistic(taskId, newStatus, oldStatus, taskCardDiv) {
+        const controller = new AbortController();
+        this.abortControllers.set(taskId, controller);
+        
+        try {
+            console.log(`🚀 Optimistic toggle: ${taskId} to ${newStatus}`);
+            
+            await this.apiCall(`/api/tasks/${taskId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ status: newStatus }),
+                signal: controller.signal
+            });
+            
+            console.log(`✅ Toggle successful: ${taskId}`);
+            
+            // Update routine counts without full re-render
+            await this.loadRoutines();
+            this.updateTaskCounts();
+            
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log(`🚫 Toggle aborted: ${taskId}`);
+                return; // Don't revert UI if request was cancelled
+            }
+            
+            console.error(`❌ Toggle failed: ${taskId}`, error);
+            
+            // Revert optimistic changes
+            const task = this.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.status = oldStatus;
+                this.updateTaskCardCompletionUI(taskCardDiv, oldStatus);
+            }
+            
+            this.showError('Failed to update task - reverted changes');
+            
+        } finally {
+            // Clean up pending state
+            this.pendingToggles.delete(taskId);
+            this.abortControllers.delete(taskId);
+        }
+    }
+
+    async handleTaskToggleOptimisticModal(taskId, newStatus, oldStatus) {
+        const controller = new AbortController();
+        this.abortControllers.set(taskId, controller);
+        
+        try {
+            console.log(`🚀 Optimistic modal toggle: ${taskId} to ${newStatus}`);
+            
+            await this.apiCall(`/api/tasks/${taskId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ status: newStatus }),
+                signal: controller.signal
+            });
+            
+            console.log(`✅ Modal toggle successful: ${taskId}`);
+            
+            // Update the task in memory and refresh any visible task cards
+            const task = this.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.status = newStatus;
+                // Update any visible task card too
+                const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+                if (taskCard) {
+                    this.updateTaskCardCompletionUI(taskCard, newStatus);
+                }
+            }
+            
+            // Update routine counts
+            await this.loadRoutines();
+            this.updateTaskCounts();
+            
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log(`🚫 Modal toggle aborted: ${taskId}`);
+                return;
+            }
+            
+            console.error(`❌ Modal toggle failed: ${taskId}`, error);
+            
+            // Revert modal UI
+            if (this.editingTask && this.editingTask.id === taskId) {
+                this.editingTask.status = oldStatus;
+                this.updateEditModalCompletionUI(oldStatus);
+            }
+            
+            // Revert task card if visible
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            if (taskCard) {
+                const task = this.tasks.find(t => t.id === taskId);
+                if (task) {
+                    task.status = oldStatus;
+                    this.updateTaskCardCompletionUI(taskCard, oldStatus);
+                }
+            }
+            
+            this.showError('Failed to update task - reverted changes');
+            
+        } finally {
+            // Clean up pending state
+            this.pendingToggles.delete(taskId);
+            this.abortControllers.delete(taskId);
         }
     }
 
@@ -2651,7 +3107,23 @@ class ClioBoardApp {
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
                 dragClass: 'sortable-drag',
-                onEnd: (evt) => this.handleDragEnd(evt)
+                filter: '.add-task-ghost-card',  // Can't drag the ghost card
+                onChange: (evt) => {
+                    // Keep ghost card at the bottom during drag
+                    const ghostCard = evt.to.querySelector('.add-task-ghost-card');
+                    if (ghostCard && ghostCard.parentElement === evt.to) {
+                        evt.to.appendChild(ghostCard);
+                    }
+                },
+                onEnd: (evt) => {
+                    // Ensure ghost card is at the bottom after drop
+                    const ghostCard = evt.to.querySelector('.add-task-ghost-card');
+                    if (ghostCard) {
+                        evt.to.appendChild(ghostCard);
+                    }
+                    
+                    this.handleDragEnd(evt);
+                }
             });
             
             this.sortables[column] = sortable;
@@ -3427,6 +3899,9 @@ class ClioBoardApp {
         const completedCheckbox = document.getElementById('routine-completed');
         
         if (completedCheckbox.checked) {
+            // BIG CELEBRATION for routine completion! 🎉
+            this.triggerRoutineCompletionCelebration();
+            
             // Disable status controls when marked as completed
             this.setStatusControlsEnabled(false);
         } else {

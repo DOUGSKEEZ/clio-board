@@ -63,7 +63,8 @@ app.use(helmet({
       imgSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
-      formAction: ["'self'"]
+      formAction: ["'self'"],
+      workerSrc: ["'self'", "blob:"]
     }
   }
 }));
