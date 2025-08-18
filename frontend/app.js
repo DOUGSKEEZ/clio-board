@@ -2110,11 +2110,11 @@ class ClioBoardApp {
         
         if (taskTitle) {
             if (newStatus === 'completed') {
-                taskTitle.classList.add('text-gray-500', 'line-through');
-                taskTitle.classList.remove('text-gray-900');
+                taskTitle.classList.add('text-gray-500', 'line-through', 'ml-6');
+                taskTitle.classList.remove('text-gray-900', 'group-hover:ml-6');
             } else {
-                taskTitle.classList.remove('text-gray-500', 'line-through');
-                taskTitle.classList.add('text-gray-900');
+                taskTitle.classList.remove('text-gray-500', 'line-through', 'ml-6');
+                taskTitle.classList.add('text-gray-900', 'group-hover:ml-6');
             }
         }
     }

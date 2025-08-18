@@ -93,11 +93,11 @@
         .board-columns {
             display: flex !important;
             gap: 1.5rem !important;
-            min-height: 400px;
+            align-items: flex-start !important;
         }
         
         .board-column {
-            flex: 1;
+            flex: 0 1 auto;
             min-width: 280px;
             max-width: 320px;
         }
@@ -209,7 +209,7 @@
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
-                        <div id="today-tasks" class="space-y-3 min-h-[400px] p-2 rounded">
+                        <div id="today-tasks" class="space-y-3 p-2 rounded">
                             <!-- Tasks will be loaded here dynamically -->
                         </div>
                     </div>
@@ -225,7 +225,7 @@
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
-                        <div id="tomorrow-tasks" class="space-y-3 min-h-[400px] p-2 rounded">
+                        <div id="tomorrow-tasks" class="space-y-3 p-2 rounded">
                             <!-- Tasks will be loaded here dynamically -->
                         </div>
                     </div>
@@ -241,7 +241,7 @@
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
-                        <div id="week-tasks" class="space-y-3 min-h-[400px] p-2 rounded">
+                        <div id="week-tasks" class="space-y-3 p-2 rounded">
                             <!-- Tasks will be loaded here dynamically -->
                         </div>
                     </div>
@@ -257,7 +257,7 @@
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
-                        <div id="horizon-tasks" class="space-y-3 min-h-[400px] p-2 rounded">
+                        <div id="horizon-tasks" class="space-y-3 p-2 rounded">
                             <!-- Tasks will be loaded here dynamically -->
                         </div>
                     </div>
