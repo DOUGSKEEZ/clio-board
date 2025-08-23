@@ -121,6 +121,25 @@
 - [x] **Enhanced routine picker** - Trello-style dropdown with search, color-coded cards (replacing basic HTML select)
 - [x] **List item reordering** - drag to reorder items within lists
 
+## Phase 2 Polish: User-Facing Features 🎨 TODO
+- [ ] **Edit Routine mini-menu improvements**
+  - [ ] Add icon editing capability (currently only color/name)
+  - [ ] Split long name field into separate Icon & Name fields
+- [ ] **Routine list condensing** - Make routine items same height as "no routine" option
+- [ ] **Keyboard navigation** - Full keyboard support for routine selection (pure keyboard task creation)
+- [ ] **Edit Task modal polish**
+  - [ ] Make Notes text smaller
+  - [ ] Make modal taller for better visibility
+- [ ] **Mini-board enhancements**
+  - [ ] Add edit task capability when clicking tasks in Routine Mini-Board
+  - [ ] Add 4 mini ghost cards (Today/Tomorrow/This Week/Horizon) for task creation
+
+## Pre-Phase 3: Critical Stability & Performance 🛡️ TODO
+- [ ] **Agent rate limiting** - Express middleware for 500 req/min (security critical)
+- [ ] **Error boundaries** - Wrap network operations in try/catch, prevent UI crashes  
+- [ ] **Event delegation** - Single parent listener instead of per-card listeners (performance)
+- [ ] **Constants extraction** - Centralize magic strings for maintainability
+
 ## Phase 3: Note Board Module 📋 PLANNED
 - [ ] **Note Board UI** - 4-column scratch area (User Notes Col 1-2, Agent Notes Col 3-4)
 - [ ] **Note creation** - Click to add note blobs in any column

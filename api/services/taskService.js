@@ -15,6 +15,7 @@ class TaskService {
                r.title as routine_title,
                r.color as routine_color,
                r.icon as routine_icon,
+               r.status as routine_status,
                COALESCE(
                  CASE WHEN t.type = 'list' THEN (
                    SELECT json_agg(
@@ -69,6 +70,7 @@ class TaskService {
                r.title as routine_title,
                r.color as routine_color,
                r.icon as routine_icon,
+               r.status as routine_status,
                COALESCE(
                  CASE WHEN t.type = 'list' THEN (
                    SELECT json_agg(
@@ -123,6 +125,7 @@ class TaskService {
                r.title as routine_title,
                r.color as routine_color,
                r.icon as routine_icon,
+               r.status as routine_status,
                COALESCE(
                  CASE WHEN t.type = 'list' THEN (
                    SELECT json_agg(

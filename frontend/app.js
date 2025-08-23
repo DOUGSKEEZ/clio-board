@@ -809,7 +809,7 @@ class ClioBoardApp {
                 
                 // Create date span
                 const dateSpan = document.createElement('span');
-                dateSpan.className = 'date-indicator text-xs text-gray-400 mr-2';
+                dateSpan.className = 'date-indicator text-xs text-gray-400 font-semibold mr-2';
                 
                 // Move plus button into wrapper
                 headerDiv.removeChild(plusButton);
@@ -837,7 +837,7 @@ class ClioBoardApp {
                 rightWrapper = document.createElement('div');
                 rightWrapper.className = 'date-plus-wrapper flex items-center';
                 const dateSpan = document.createElement('span');
-                dateSpan.className = 'date-indicator text-xs text-gray-400 mr-2';
+                dateSpan.className = 'date-indicator text-xs text-gray-400 font-semibold mr-2';
                 headerDiv.removeChild(plusButton);
                 rightWrapper.appendChild(dateSpan);
                 rightWrapper.appendChild(plusButton);
@@ -855,8 +855,11 @@ class ClioBoardApp {
             const plusButton = headerDiv.querySelector('button');
             const weekHeader = weekColumn.querySelector('h2');
             const dayOfWeek = now.getDay();
-            // If it's Saturday (6) or Sunday (0), show "Next Week"
+            // Weekend: Saturday (6) or Sunday (0) -> "Next Week"
+            // End of week: Thursday (4) or Friday (5) -> "This Weekend"  
+            // Start of week: Monday (1), Tuesday (2), Wednesday (3) -> "This Week"
             const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+            const isEndOfWeek = dayOfWeek === 4 || dayOfWeek === 5; // Thursday or Friday
             
             let dateRange;
             if (isWeekend) {
@@ -871,6 +874,17 @@ class ClioBoardApp {
                 nextSunday.setDate(nextSunday.getDate() + 6);
                 
                 dateRange = `${nextMonday.getMonth() + 1}/${nextMonday.getDate()}-${nextSunday.getMonth() + 1}/${nextSunday.getDate()}`;
+            } else if (isEndOfWeek) {
+                weekHeader.firstChild.textContent = 'This Weekend';
+                
+                // Calculate weekend range (Thursday to Sunday)
+                const thursday = new Date(now);
+                thursday.setDate(thursday.getDate() - (dayOfWeek - 4)); // Go back to Thursday of this week
+                
+                const sunday = new Date(thursday);
+                sunday.setDate(sunday.getDate() + 3); // Thursday + 3 = Sunday
+                
+                dateRange = `${thursday.getMonth() + 1}/${thursday.getDate()}-${sunday.getMonth() + 1}/${sunday.getDate()}`;
             } else {
                 weekHeader.firstChild.textContent = 'This Week';
                 
@@ -889,7 +903,7 @@ class ClioBoardApp {
                 rightWrapper = document.createElement('div');
                 rightWrapper.className = 'date-plus-wrapper flex items-center';
                 const dateSpan = document.createElement('span');
-                dateSpan.className = 'date-indicator text-xs text-gray-400 mr-2';
+                dateSpan.className = 'date-indicator text-xs text-gray-400 font-semibold mr-2';
                 headerDiv.removeChild(plusButton);
                 rightWrapper.appendChild(dateSpan);
                 rightWrapper.appendChild(plusButton);
@@ -911,7 +925,7 @@ class ClioBoardApp {
                 rightWrapper = document.createElement('div');
                 rightWrapper.className = 'date-plus-wrapper flex items-center';
                 const dateSpan = document.createElement('span');
-                dateSpan.className = 'date-indicator text-xs text-gray-400 mr-2';
+                dateSpan.className = 'date-indicator text-xs text-gray-400 font-semibold mr-2';
                 headerDiv.removeChild(plusButton);
                 rightWrapper.appendChild(dateSpan);
                 rightWrapper.appendChild(plusButton);
@@ -1314,14 +1328,68 @@ class ClioBoardApp {
                 picker.classList.add('hidden');
             } else {
                 this.populateRoutinePicker(prefix);
+                
+                // Position the picker dynamically to escape modal overflow constraints
+                this.positionRoutinePicker(picker, button);
+                
                 picker.classList.remove('hidden');
                 search.focus();
+                
+                // No need for virtual selection since options are now focusable
+            }
+        });
+        
+        // Button keyboard handler - open picker on arrow keys or Enter
+        button.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Open the picker if not already open
+                if (picker.classList.contains('hidden')) {
+                    // Close all other pickers
+                    document.querySelectorAll('[id$="-routine-picker"]').forEach(p => {
+                        if (p !== picker) p.classList.add('hidden');
+                    });
+                    
+                    this.populateRoutinePicker(prefix);
+                    
+                    // Position the picker dynamically to escape modal overflow constraints
+                    this.positionRoutinePicker(picker, button);
+                    
+                    picker.classList.remove('hidden');
+                    search.focus();
+                    
+                    // If down arrow, user can press Tab to move to options
+                }
             }
         });
         
         // Search input handler
         search.addEventListener('input', (e) => {
             this.filterRoutinePicker(prefix, e.target.value);
+        });
+        
+        // Search field keyboard handler - only Tab and Escape
+        search.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                // Move focus to first visible routine option
+                e.preventDefault();
+                const optionsContainer = document.getElementById(`${prefix}-routine-options`);
+                const visibleOptions = Array.from(optionsContainer.querySelectorAll('.routine-option:not([style*="display: none"])[tabindex="0"]'));
+                if (visibleOptions.length > 0) {
+                    visibleOptions[0].focus();
+                }
+            } else if (e.key === 'Escape') {
+                // Close picker and return focus to button
+                const picker = document.getElementById(`${prefix}-routine-picker`);
+                if (picker) {
+                    picker.classList.add('hidden');
+                    this.resetRoutinePickerPosition(picker);
+                    const button = document.getElementById(`${prefix}-routine-btn`);
+                    if (button) button.focus();
+                }
+            }
         });
         
         // Setup edit panel event listeners
@@ -1336,6 +1404,7 @@ class ClioBoardApp {
         document.addEventListener('click', (e) => {
             if (!button.contains(e.target) && !picker.contains(e.target)) {
                 picker.classList.add('hidden');
+                this.resetRoutinePickerPosition(picker);
             }
         });
         
@@ -1395,7 +1464,8 @@ class ClioBoardApp {
         const div = document.createElement('div');
         
         if (!routine) {
-            div.className = 'routine-option group py-1 px-2 cursor-pointer flex items-center space-x-2 bg-gray-50 hover:bg-gray-100 border-l-3 border-gray-300';
+            div.className = 'routine-option group py-1 px-2 cursor-pointer flex items-center space-x-2 bg-gray-50 hover:bg-gray-100 focus:bg-blue-100 border-l-3 border-gray-300';
+            div.tabIndex = 0; // Make focusable
             div.dataset.routineId = '';
             div.dataset.prefix = prefix;
             
@@ -1433,7 +1503,8 @@ class ClioBoardApp {
                 borderColor = colors.border;
             }
             
-            div.className = 'routine-option group py-1 px-2 cursor-pointer flex items-center justify-between border-l-3';
+            div.className = 'routine-option group py-1 px-2 cursor-pointer flex items-center justify-between border-l-3 focus:bg-blue-100';
+            div.tabIndex = 0; // Make focusable
             div.style.backgroundColor = backgroundColor;
             div.style.borderLeftColor = borderColor;
             div.dataset.routineId = routine.id;
@@ -1441,15 +1512,15 @@ class ClioBoardApp {
             
             div.innerHTML = `
                 <div class="flex items-center space-x-2 flex-1">
-                    <span class="text-sm" style="color: ${textColor}">${routine.icon || '⭐'}</span>
+                    <span class="text-xs" style="color: ${textColor}">${routine.icon || '⭐'}</span>
                     <div class="flex items-center space-x-1.5">
                         <span class="text-xs font-medium" style="color: ${textColor}">${this.escapeHtml(routine.title)}</span>
-                        ${routine.status === 'paused' ? '<span class="text-xs text-gray-500 bg-white px-1 py-0.5 rounded">▐▐ PAUSED</span>' : ''}
+                        ${routine.status === 'paused' ? '<span class="text-xs text-gray-500">[<span style="font-size: 9px;">⏸</span> Paused]</span>' : ''}
                     </div>
                 </div>
-                <button class="edit-routine-btn p-1.5 hover:bg-white hover:bg-opacity-100 hover:border hover:border-gray-300 rounded transition-all group/edit flex items-center space-x-1" data-routine-id="${routine.id}" data-prefix="${prefix}">
+                <button class="edit-routine-btn p-1 hover:bg-white hover:bg-opacity-100 hover:border hover:border-gray-300 rounded transition-all group/edit flex items-center space-x-1" data-routine-id="${routine.id}" data-prefix="${prefix}" tabindex="-1">
                     <span class="text-xs font-medium opacity-0 group-hover/edit:opacity-100 transition-opacity whitespace-nowrap" style="color: ${textColor}">Edit</span>
-                    <i class="fas fa-edit text-sm" style="color: ${textColor}"></i>
+                    <i class="fas fa-edit text-xs" style="color: ${textColor}"></i>
                 </button>
             `;
         }
@@ -1474,6 +1545,49 @@ class ClioBoardApp {
                 });
             }
         }
+        
+        // Add keyboard handler for focus and navigation
+        div.addEventListener('keydown', (e) => {
+            const optionsContainer = div.parentElement;
+            // Only include visible options for navigation
+            const visibleOptions = Array.from(optionsContainer.querySelectorAll('.routine-option[tabindex="0"]:not([style*="display: none"])'));
+            const currentIndex = visibleOptions.indexOf(div);
+            
+            switch(e.key) {
+                case 'Enter':
+                case ' ':
+                    e.preventDefault();
+                    this.selectRoutineOption(prefix, routine);
+                    break;
+                    
+                case 'ArrowDown':
+                    e.preventDefault();
+                    const nextIndex = currentIndex < visibleOptions.length - 1 ? currentIndex + 1 : 0;
+                    if (visibleOptions[nextIndex]) {
+                        visibleOptions[nextIndex].focus();
+                    }
+                    break;
+                    
+                case 'ArrowUp':
+                    e.preventDefault();
+                    const prevIndex = currentIndex > 0 ? currentIndex - 1 : visibleOptions.length - 1;
+                    if (visibleOptions[prevIndex]) {
+                        visibleOptions[prevIndex].focus();
+                    }
+                    break;
+                    
+                case 'Escape':
+                    e.preventDefault();
+                    const picker = document.getElementById(`${prefix}-routine-picker`);
+                    if (picker) {
+                        picker.classList.add('hidden');
+                        this.resetRoutinePickerPosition(picker);
+                        const button = document.getElementById(`${prefix}-routine-btn`);
+                        if (button) button.focus();
+                    }
+                    break;
+            }
+        });
         
         return div;
     }
@@ -1530,6 +1644,12 @@ class ClioBoardApp {
         // Clear search
         const search = document.getElementById(`${prefix}-routine-search`);
         if (search) search.value = '';
+        
+        // Move focus to the next field (Notes textarea)
+        const notesField = document.getElementById(prefix === 'task' ? 'task-notes' : 'edit-task-notes');
+        if (notesField) {
+            notesField.focus();
+        }
     }
     
     setupRoutineEditListeners(prefix) {
@@ -1553,6 +1673,18 @@ class ClioBoardApp {
             });
         }
         
+        
+        // Icon input Enter key handler
+        const iconInput = document.getElementById(`${prefix}-edit-routine-icon`);
+        if (iconInput) {
+            iconInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.saveRoutineEdit(prefix);
+                }
+            });
+        }
         
         // Title input Enter key handler
         const titleInput = document.getElementById(`${prefix}-edit-routine-title`);
@@ -1807,6 +1939,42 @@ class ClioBoardApp {
             const matches = !term || text.includes(term);
             option.style.display = matches ? 'flex' : 'none';
         });
+        
+        // Filtering complete - user can Tab to focus options as needed
+    }
+    
+    positionRoutinePicker(picker, button) {
+        // Get button position relative to viewport
+        const buttonRect = button.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const spaceBelow = viewportHeight - buttonRect.bottom;
+        const spaceAbove = buttonRect.top;
+        
+        // Reset positioning classes/styles
+        picker.style.position = 'fixed';
+        picker.style.left = buttonRect.left + 'px';
+        picker.style.width = buttonRect.width + 'px';
+        picker.style.maxHeight = Math.min(400, spaceBelow - 10) + 'px'; // Leave 10px margin
+        
+        // Position below button if there's space, otherwise above
+        if (spaceBelow > 200) {
+            picker.style.top = (buttonRect.bottom + 4) + 'px';
+            picker.style.bottom = 'auto';
+        } else {
+            picker.style.bottom = (viewportHeight - buttonRect.top + 4) + 'px';
+            picker.style.top = 'auto';
+            picker.style.maxHeight = Math.min(400, spaceAbove - 10) + 'px';
+        }
+    }
+    
+    resetRoutinePickerPosition(picker) {
+        // Reset to original CSS positioning
+        picker.style.position = '';
+        picker.style.left = '';
+        picker.style.top = '';
+        picker.style.bottom = '';
+        picker.style.width = '';
+        picker.style.maxHeight = '';
     }
     
     async setRoutinePickerSelection(prefix, routineId) {
@@ -1890,6 +2058,12 @@ class ClioBoardApp {
     }
     
     populateRoutineEditForm(routine, prefix) {
+        // Populate icon field
+        const iconInput = document.getElementById(`${prefix}-edit-routine-icon`);
+        if (iconInput) {
+            iconInput.value = routine.icon || '⭐';
+        }
+        
         // Populate title field
         const titleInput = document.getElementById(`${prefix}-edit-routine-title`);
         if (titleInput) {
@@ -1989,7 +2163,9 @@ class ClioBoardApp {
     async saveRoutineEdit(prefix) {
         if (!this.currentEditingRoutine) return;
         
+        const iconInput = document.getElementById(`${prefix}-edit-routine-icon`);
         const titleInput = document.getElementById(`${prefix}-edit-routine-title`);
+        const newIcon = iconInput?.value?.trim() || '⭐';
         const newTitle = titleInput?.value?.trim();
         
         if (!newTitle) {
@@ -1998,10 +2174,13 @@ class ClioBoardApp {
         }
         
         try {
-            // Only save title since color is auto-saved
-            const updateData = { title: newTitle };
+            // Save both icon and title (color is auto-saved separately)
+            const updateData = { 
+                title: newTitle,
+                icon: newIcon
+            };
             
-            console.log('Saving routine title:', updateData);
+            console.log('Saving routine:', updateData);
             
             const updatedRoutine = await this.apiCall(`/api/routines/${this.currentEditingRoutine.id}`, {
                 method: 'PUT',
@@ -2396,10 +2575,25 @@ class ClioBoardApp {
         // Update modal title to show which column
         const modalTitle = document.getElementById('modal-title');
         if (modalTitle) {
+            // Determine current week column display name
+            const now = new Date();
+            const dayOfWeek = now.getDay();
+            const isEndOfWeek = dayOfWeek === 4 || dayOfWeek === 5; // Thursday or Friday
+            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Saturday or Sunday
+            
+            let thisWeekDisplayName;
+            if (isWeekend) {
+                thisWeekDisplayName = 'Next Week';
+            } else if (isEndOfWeek) {
+                thisWeekDisplayName = 'This Weekend';
+            } else {
+                thisWeekDisplayName = 'This Week';
+            }
+            
             const columnNames = {
                 'today': 'Today',
                 'tomorrow': 'Tomorrow', 
-                'this_week': 'This Week',
+                'this_week': thisWeekDisplayName,
                 'horizon': 'On the Horizon'
             };
             modalTitle.innerHTML = `Add Task - <strong>${columnNames[defaultColumn] || 'Today'}</strong>`;
@@ -3823,6 +4017,9 @@ class ClioBoardApp {
             });
             await this.loadRoutines();
             this.loadRoutinesView();
+            // Refresh task board to show updated routine status on task cards
+            await this.loadTasks();
+            this.renderBoard();
         } catch (error) {
             console.error('Failed to pause routine:', error);
             this.showError('Failed to pause routine');
@@ -3839,6 +4036,9 @@ class ClioBoardApp {
             });
             await this.loadRoutines();
             this.loadRoutinesView();
+            // Refresh task board to show updated routine status on task cards
+            await this.loadTasks();
+            this.renderBoard();
         } catch (error) {
             console.error('Failed to resume routine:', error);
             this.showError('Failed to resume routine');
