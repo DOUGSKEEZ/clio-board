@@ -62,7 +62,7 @@
 - [x] Audit logging for all agent actions
 - [x] IP validation for agent requests (127.0.0.1, 192.168.10.21, 192.168.20.20)
 - [x] Log warnings for agent key used from unexpected IPs (403 Forbidden)
-- [ ] Rate limiting for agents (500 req/min, 429 status, log when hit)
+- [x] Rate limiting for agents (500 req/min, 429 status, log when hit)
 
 # Next Priority Tasks (MVP Core)
 
@@ -116,29 +116,44 @@
 - [x] **Task-routine assignment** - basic dropdown selection in Add/Edit Task modals
 - [x] **Routine card reordering** - drag-and-drop functionality with backend persistence
 - [x] **Mini-board modal** - click routine tag → see all tasks for that routine
+- [x] **Routine context preservation** - Ghost cards in routine mini-boards auto-populate routine dropdown when creating tasks
 
 ### 📋 REMAINING PHASE 2 FEATURES
 - [x] **Enhanced routine picker** - Trello-style dropdown with search, color-coded cards (replacing basic HTML select)
 - [x] **List item reordering** - drag to reorder items within lists
 
-## Phase 2 Polish: User-Facing Features 🎨 TODO
-- [ ] **Edit Routine mini-menu improvements**
-  - [ ] Add icon editing capability (currently only color/name)
-  - [ ] Split long name field into separate Icon & Name fields
-- [ ] **Routine list condensing** - Make routine items same height as "no routine" option
-- [ ] **Keyboard navigation** - Full keyboard support for routine selection (pure keyboard task creation)
-- [ ] **Edit Task modal polish**
-  - [ ] Make Notes text smaller
-  - [ ] Make modal taller for better visibility
-- [ ] **Mini-board enhancements**
-  - [ ] Add edit task capability when clicking tasks in Routine Mini-Board
-  - [ ] Add 4 mini ghost cards (Today/Tomorrow/This Week/Horizon) for task creation
+## Phase 2 Polish: User-Facing Features 🎨 COMPLETED ✅
+- [x] **Edit Routine mini-menu improvements**
+  - [x] Add icon editing capability (currently only color/name)
+  - [x] Split long name field into separate Icon & Name fields
+- [x] **Routine list condensing** - Make routine items same height as "no routine" option
+- [x] **Keyboard navigation** - Full keyboard support for routine selection (pure keyboard task creation)
+- [x] **Edit Task modal polish**
+  - [x] Make Notes text smaller
+  - [x] Make modal taller for better visibility
+- [x] **Mini-board enhancements**
+  - [x] Add edit task capability when clicking tasks in Routine Mini-Board
+  - [x] Add 4 mini ghost cards (Today/Tomorrow/This Week/Horizon) for task creation
+- [x] **Bug fixes**
+  - [x] Fixed task position bug after drag and edit operations
+  - [x] Fixed routine card task counts to show active vs archived correctly
 
-## Pre-Phase 3: Critical Stability & Performance 🛡️ TODO
-- [ ] **Agent rate limiting** - Express middleware for 500 req/min (security critical)
-- [ ] **Error boundaries** - Wrap network operations in try/catch, prevent UI crashes  
-- [ ] **Event delegation** - Single parent listener instead of per-card listeners (performance)
-- [ ] **Constants extraction** - Centralize magic strings for maintainability
+## Pre-Phase 3: Critical Stability & Performance 🛡️ COMPLETED ✅
+- [x] **Agent rate limiting** - Express middleware for 500 req/min (security critical)
+- [x] **Error boundaries** - Comprehensive network failure handling with user feedback
+  - [x] Global network error handler with structured error objects
+  - [x] Network connectivity detection (online/offline monitoring)  
+  - [x] Retry mechanisms with exponential backoff (3 attempts, jitter)
+  - [x] User-friendly error notifications with contextual messages
+  - [x] Connection status banners (positioned to not block navigation)
+- [x] **Event delegation** - Single parent listener instead of per-card listeners (performance)
+  - [x] **CRITICAL BUG FIX**: Fixed UUID parseInt() bug that broke all task interactions
+  - [x] Task IDs like "550e8400-e29b-41d4-a716-446655440102" were being truncated to "550"
+  - [x] Removed all parseInt() calls for UUID task IDs - task cards now work properly
+- [x] **Constants extraction** - Centralized magic strings for maintainability
+  - [x] Task status constants (PENDING, COMPLETED, ARCHIVED)
+  - [x] CSS class constants (HIDDEN, TASK_CARD, etc.)
+  - [x] Error code constants (OFFLINE, NETWORK_ERROR, etc.)
 
 ## Phase 3: Note Board Module 📋 PLANNED
 - [ ] **Note Board UI** - 4-column scratch area (User Notes Col 1-2, Agent Notes Col 3-4)
@@ -175,8 +190,8 @@
 - [ ] **Font & spacing optimization** - Typography improvements and space utilization
 - [ ] **Self-host assets** - Local Tailwind CSS, Font Awesome, SortableJS with custom colors
 - [ ] **Mobile responsive design** - Tablet/phone optimized layouts
-- [ ] **Agent rate limiting** - Express middleware (~10 lines)
-- [ ] **Performance tuning** - Bundle size reduction, render optimizations
+- [x] **Agent rate limiting** - Express middleware (~10 lines) ✅ COMPLETED
+- [x] **Performance tuning** - Event delegation implemented for better render performance ✅ COMPLETED
 - [ ] **Additional UX polish** - Micro-interactions and visual refinements
 
 ## Phase 4: Advanced Features 🔮 FUTURE
@@ -187,8 +202,8 @@
 - [ ] Backup/export functionality
 - [ ] Keyboard shortcuts
 
-##   Potential Quick Wins (from cursory code review Aug 15 for app.js monolith):
-  1. Error boundaries - Wrap more operations in try/catch blocks. Network calls fail randomly
-  2. Debouncing - Add delays to search/filter operations to avoid excessive renders
-  3. Constants - Pull out magic strings like 'routineTagsMinimized' to top-level constants
-  4. Event delegation - Instead of attaching listeners to every task card, use one listener on the parent
+## ✅ Potential Quick Wins (from cursory code review Aug 15 for app.js monolith) - COMPLETED!
+  1. ✅ Error boundaries - Comprehensive error handling with retry mechanisms and user feedback
+  2. [ ] Debouncing - Add delays to search/filter operations to avoid excessive renders  
+  3. ✅ Constants - Extracted magic strings to static class constants for maintainability
+  4. ✅ Event delegation - Single delegated listener replaced individual task card listeners

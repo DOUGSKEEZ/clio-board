@@ -45,6 +45,7 @@ temp/
 # Claude Code config
 .claude/
 claude.md
+CLAUDE.md
 
 # PM2
 .pm2/

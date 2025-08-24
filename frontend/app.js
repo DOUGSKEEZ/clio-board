@@ -1789,16 +1789,16 @@ class ClioBoardApp {
         
         // Single delegated click handler for all task card interactions
         document.addEventListener('click', (e) => {
-            // Task completion button
-            if (e.target.matches(`.${ClioBoardApp.CSS_CLASSES.TASK_COMPLETE_BTN}`) || e.target.closest(`.${ClioBoardApp.CSS_CLASSES.TASK_COMPLETE_BTN}`)) {
-                const completeBtn = e.target.closest(`.${ClioBoardApp.CSS_CLASSES.TASK_COMPLETE_BTN}`);
-                const taskCard = completeBtn.closest(`.${ClioBoardApp.CSS_CLASSES.TASK_CARD}`);
-                const taskId = parseInt(taskCard.dataset.taskId);
+            // Task completion button (handle both button and icon clicks)
+            if (e.target.matches('.task-complete-btn, .task-complete-btn *') || e.target.closest('.task-complete-btn')) {
+                e.stopPropagation();
+                e.preventDefault();
+                const completeBtn = e.target.closest('.task-complete-btn');
+                const taskCard = completeBtn.closest('.task-card');
+                const taskId = taskCard.dataset.taskId; // Don't use parseInt on UUIDs!
                 const task = this.findTaskById(taskId);
                 
                 if (!task) return;
-                
-                e.stopPropagation();
                 
                 // Double-click protection
                 if (this.pendingToggles.has(task.id)) {
@@ -1842,11 +1842,11 @@ class ClioBoardApp {
                 
                 // Close other menus
                 document.querySelectorAll('.task-menu').forEach(m => {
-                    if (m !== menu) m.classList.add('hidden');
+                    if (m !== menu) m.classList.add(ClioBoardApp.CSS_CLASSES.HIDDEN);
                 });
                 
                 // Toggle this menu
-                if (menu) menu.classList.toggle('hidden');
+                if (menu) menu.classList.toggle(ClioBoardApp.CSS_CLASSES.HIDDEN);
                 return;
             }
             
@@ -1854,7 +1854,7 @@ class ClioBoardApp {
             if (e.target.matches('.archive-task-btn') || e.target.closest('.archive-task-btn')) {
                 const archiveBtn = e.target.closest('.archive-task-btn');
                 const taskCard = archiveBtn.closest('.task-card');
-                const taskId = parseInt(taskCard.dataset.taskId);
+                const taskId = taskCard.dataset.taskId;
                 
                 e.stopPropagation();
                 
@@ -1862,7 +1862,7 @@ class ClioBoardApp {
                 
                 // Close menu
                 const menu = taskCard.querySelector('.task-menu');
-                if (menu) menu.classList.add('hidden');
+                if (menu) menu.classList.add(ClioBoardApp.CSS_CLASSES.HIDDEN);
                 return;
             }
             
@@ -1870,16 +1870,16 @@ class ClioBoardApp {
             if (e.target.matches('.expand-btn') || e.target.closest('.expand-btn')) {
                 const expandBtn = e.target.closest('.expand-btn');
                 const taskCard = expandBtn.closest('.task-card');
-                const taskId = parseInt(taskCard.dataset.taskId);
+                const taskId = taskCard.dataset.taskId;
                 const hiddenItems = taskCard.querySelector('.hidden-items');
                 const collapseBtn = taskCard.querySelector('.collapse-btn');
                 
                 e.stopPropagation();
                 
                 this.expandedLists.add(taskId);
-                if (hiddenItems) hiddenItems.classList.remove('hidden');
-                expandBtn.classList.add('hidden');
-                if (collapseBtn) collapseBtn.classList.remove('hidden');
+                if (hiddenItems) hiddenItems.classList.remove(ClioBoardApp.CSS_CLASSES.HIDDEN);
+                expandBtn.classList.add(ClioBoardApp.CSS_CLASSES.HIDDEN);
+                if (collapseBtn) collapseBtn.classList.remove(ClioBoardApp.CSS_CLASSES.HIDDEN);
                 return;
             }
             
@@ -1887,16 +1887,16 @@ class ClioBoardApp {
             if (e.target.matches('.collapse-btn') || e.target.closest('.collapse-btn')) {
                 const collapseBtn = e.target.closest('.collapse-btn');
                 const taskCard = collapseBtn.closest('.task-card');
-                const taskId = parseInt(taskCard.dataset.taskId);
+                const taskId = taskCard.dataset.taskId;
                 const hiddenItems = taskCard.querySelector('.hidden-items');
                 const expandBtn = taskCard.querySelector('.expand-btn');
                 
                 e.stopPropagation();
                 
                 this.expandedLists.delete(taskId);
-                if (hiddenItems) hiddenItems.classList.add('hidden');
-                collapseBtn.classList.add('hidden');
-                if (expandBtn) expandBtn.classList.remove('hidden');
+                if (hiddenItems) hiddenItems.classList.add(ClioBoardApp.CSS_CLASSES.HIDDEN);
+                collapseBtn.classList.add(ClioBoardApp.CSS_CLASSES.HIDDEN);
+                if (expandBtn) expandBtn.classList.remove(ClioBoardApp.CSS_CLASSES.HIDDEN);
                 return;
             }
             
@@ -1910,7 +1910,7 @@ class ClioBoardApp {
             // Task card click (for edit)
             if (e.target.closest('.task-card')) {
                 const taskCard = e.target.closest('.task-card');
-                const taskId = parseInt(taskCard.dataset.taskId);
+                const taskId = taskCard.dataset.taskId; // Don't use parseInt on UUIDs!
                 const task = this.findTaskById(taskId);
                 
                 if (!task) return;
@@ -3192,16 +3192,11 @@ class ClioBoardApp {
     openAddTaskModal(defaultColumn = 'today', routineId = null) {
         const modal = document.getElementById('add-task-modal');
         const columnSelect = document.getElementById('task-column');
-        const routineSelect = document.getElementById('task-routine');
         
         // Store the selected column for use when submitting
         this.selectedColumn = defaultColumn;
         columnSelect.value = defaultColumn;
         
-        // Pre-select routine if provided
-        if (routineId && routineSelect) {
-            routineSelect.value = routineId;
-        }
         
         // Clear any previous list items and add one empty field (but don't focus it)
         document.getElementById('list-items-container').innerHTML = '';
@@ -3241,9 +3236,23 @@ class ClioBoardApp {
             modalTitle.innerHTML = `Add Task - <strong>${columnNames[defaultColumn] || 'Today'}</strong>`;
         }
         
-        // Reset routine picker to main view and clear selection
+        // Reset routine picker to main view first
         this.resetRoutinePickerToMain('task');
-        this.setRoutinePickerSelection('task', null);
+        
+        // Then pre-select routine if provided (after reset)
+        if (routineId) {
+            // Find the routine object by ID
+            const routine = this.routines.find(r => r.id === routineId);
+            if (routine) {
+                // Use the proper routine selection method
+                this.selectRoutineOption('task', routine);
+            } else {
+                this.setRoutinePickerSelection('task', null);
+            }
+        } else {
+            // Select "No routine" option
+            this.setRoutinePickerSelection('task', null);
+        }
         
         modal.classList.remove('hidden');
         document.getElementById('task-title').focus();
