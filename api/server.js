@@ -7,6 +7,7 @@ require('dotenv').config();
 // Import middleware
 const { logger, requestLogger, errorLogger } = require('./middleware/logger');
 const { authenticateAgent } = require('./middleware/agentAuth');
+const { agentRateLimit } = require('./middleware/rateLimiter');
 
 // Import database pool
 const pool = require('./db/pool');
@@ -86,6 +87,9 @@ app.use(requestLogger);
 
 // Agent authentication middleware
 app.use(authenticateAgent);
+
+// Agent rate limiting middleware (500 req/min for agents)
+app.use(agentRateLimit(500, 60 * 1000));
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '../frontend')));
