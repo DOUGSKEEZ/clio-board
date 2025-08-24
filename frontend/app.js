@@ -2,6 +2,41 @@
 // API Integration and Dynamic Task Management
 
 class ClioBoardApp {
+    // Constants for magic strings
+    static TASK_STATUS = {
+        PENDING: 'pending',
+        COMPLETED: 'completed',
+        ARCHIVED: 'archived'
+    };
+    
+    static CSS_CLASSES = {
+        HIDDEN: 'hidden',
+        TASK_CARD: 'task-card',
+        TASK_MENU: 'task-menu',
+        TASK_COMPLETE_BTN: 'task-complete-btn',
+        TASK_MENU_BTN: 'task-menu-btn',
+        ARCHIVE_TASK_BTN: 'archive-task-btn',
+        EXPAND_BTN: 'expand-btn',
+        COLLAPSE_BTN: 'collapse-btn',
+        ROUTINE_TAG: 'routine-tag',
+        LIST_ITEM_CHECKBOX: 'list-item-checkbox',
+        HIDDEN_ITEMS: 'hidden-items'
+    };
+    
+    static VIEWS = {
+        TASKS: 'tasks',
+        ROUTINES: 'routines'
+    };
+    
+    static ERROR_CODES = {
+        OFFLINE: 'OFFLINE',
+        NETWORK_ERROR: 'NETWORK_ERROR',
+        NETWORK_TIMEOUT: 'NETWORK_TIMEOUT',
+        HTTP_ERROR: 'HTTP_ERROR',
+        UNKNOWN_ERROR: 'UNKNOWN_ERROR',
+        RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED'
+    };
+    
     constructor() {
         console.log('🏗️ ClioBoardApp constructor called');
         this.tasks = [];
@@ -11,10 +46,12 @@ class ClioBoardApp {
         this.sortables = {};
         this.expandedLists = new Set(); // Track which lists are expanded
         this.routineTagsMinimized = localStorage.getItem('routineTagsMinimized') === 'true'; // Global toggle for all routine tags (Trello-style)
-        this.currentView = 'tasks'; // Track current view
+        this.currentView = ClioBoardApp.VIEWS.TASKS; // Track current view
         this.currentRoutine = null; // Track current routine for detail view
         this.pendingToggles = new Set(); // Track tasks with pending completion toggles
         this.abortControllers = new Map(); // Track API requests for cancellation
+        this.isOnline = navigator.onLine; // Track network connectivity status
+        this.connectionLossTime = null; // Track when connection was lost
         
         console.log('🏗️ Constructor complete, calling init()');
         this.init();
@@ -46,6 +83,12 @@ class ClioBoardApp {
             // Set up event listeners
             this.setupEventListeners();
             
+            // Set up network connectivity monitoring
+            this.setupNetworkMonitoring();
+            
+            // Set up error boundary system for user feedback
+            this.setupErrorBoundary();
+            
             console.log('✅ CLIO Board initialized successfully');
         } catch (error) {
             console.error('❌ Failed to initialize CLIO Board:', error);
@@ -58,34 +101,194 @@ class ClioBoardApp {
 
     // API Methods
     async apiCall(endpoint, options = {}) {
-        const url = `${this.apiUrl}${endpoint}`;
-        const config = {
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            },
-            ...options
-        };
+        const maxRetries = options.maxRetries ?? 3;
+        const retryDelay = options.retryDelay ?? 1000; // Base delay in ms
+        const retryMultiplier = options.retryMultiplier ?? 2; // Exponential backoff
+        
+        // Internal retry wrapper - this does the actual network call
+        const attemptRequest = async (attempt = 0) => {
+            const url = `${this.apiUrl}${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                timeout: options.timeout || 10000, // 10 second default timeout
+                ...options
+            };
 
-        console.log(`🌐 API Call: ${options.method || 'GET'} ${url}`);
+            const attemptPrefix = attempt > 0 ? `🔄 API Retry ${attempt}:` : '🌐 API Call:';
+            console.log(`${attemptPrefix} ${options.method || 'GET'} ${url}`);
+            
+            // Check connectivity before making the request
+            if (!this.isConnectionAvailable()) {
+                const error = new Error('No internet connection');
+                error.code = ClioBoardApp.ERROR_CODES.OFFLINE;
+                error.userMessage = 'Unable to connect - you are currently offline. Check your internet connection and try again.';
+                error.retryable = true;
+                error.offline = true;
+                throw error;
+            }
+            
+            try {
+                // Create timeout promise for network timeout handling
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('NETWORK_TIMEOUT')), config.timeout);
+                });
+                
+                const fetchPromise = fetch(url, config);
+                const response = await Promise.race([fetchPromise, timeoutPromise]);
+                
+                if (!response.ok) {
+                    const errorData = await this.parseErrorResponse(response);
+                    console.error(`❌ API Error ${response.status}:`, errorData);
+                    
+                    // Create structured error object
+                    const error = new Error(errorData.message || `HTTP ${response.status}`);
+                    error.status = response.status;
+                    error.code = errorData.error || 'HTTP_ERROR';
+                    error.retryable = this.isRetryableError(response.status);
+                    error.userMessage = this.getUserFriendlyMessage(response.status, errorData);
+                    error.attempt = attempt + 1;
+                    
+                    throw error;
+                }
+                
+                // Handle empty responses (like DELETE 204)
+                if (response.status === 204 || response.headers.get('content-length') === '0') {
+                    console.log(`✅ API Response: No content (${response.status})`);
+                    return null;
+                }
+                
+                const data = await response.json();
+                console.log(`✅ API Response: ${Array.isArray(data) ? data.length + ' items' : 'object'}`);
+                return data;
+                
+            } catch (error) {
+                // Handle different types of network errors
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    // Network connection error
+                    error.code = ClioBoardApp.ERROR_CODES.NETWORK_ERROR;
+                    error.userMessage = 'Unable to connect to server. Please check your internet connection.';
+                    error.retryable = true;
+                } else if (error.message === 'NETWORK_TIMEOUT') {
+                    // Timeout error
+                    error.code = ClioBoardApp.ERROR_CODES.NETWORK_TIMEOUT;
+                    error.userMessage = 'Request timed out. The server may be experiencing issues.';
+                    error.retryable = true;
+                } else if (!error.code) {
+                    // Unknown error
+                    error.code = ClioBoardApp.ERROR_CODES.UNKNOWN_ERROR;
+                    error.userMessage = 'An unexpected error occurred. Please try again.';
+                    error.retryable = true;
+                }
+                
+                error.attempt = attempt + 1;
+                throw error;
+            }
+        };
         
-        const response = await fetch(url, config);
+        // Retry logic - attempt the request with exponential backoff
+        let lastError = null;
         
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`❌ API Error ${response.status}:`, errorText);
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                const result = await attemptRequest(attempt);
+                
+                // Success! Reset any connection warnings
+                if (attempt > 0) {
+                    console.log(`✅ Request succeeded after ${attempt} retries`);
+                    window.dispatchEvent(new CustomEvent('requestRetrySuccess', {
+                        detail: { 
+                            url: `${this.apiUrl}${endpoint}`,
+                            method: options.method || 'GET',
+                            attempt: attempt + 1,
+                            totalRetries: attempt
+                        }
+                    }));
+                }
+                
+                return result;
+                
+            } catch (error) {
+                lastError = error;
+                
+                console.error(`🚨 Network Error (attempt ${attempt + 1}/${maxRetries + 1}):`, {
+                    url: `${this.apiUrl}${endpoint}`,
+                    method: options.method || 'GET',
+                    code: error.code,
+                    message: error.message,
+                    retryable: error.retryable
+                });
+                
+                // Don't retry if error is not retryable or we've hit max retries
+                if (!error.retryable || attempt >= maxRetries) {
+                    break;
+                }
+                
+                // Calculate delay with exponential backoff + jitter
+                const delay = retryDelay * Math.pow(retryMultiplier, attempt);
+                const jitter = Math.random() * 200; // 0-200ms jitter
+                const totalDelay = delay + jitter;
+                
+                console.log(`⏳ Retrying in ${Math.round(totalDelay)}ms...`);
+                
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, totalDelay));
+            }
         }
         
-        // Handle empty responses (like DELETE 204)
-        if (response.status === 204 || response.headers.get('content-length') === '0') {
-            console.log(`✅ API Response: No content (${response.status})`);
-            return null;
-        }
+        // All retries failed, emit final error event
+        window.dispatchEvent(new CustomEvent('networkError', { 
+            detail: { 
+                url: `${this.apiUrl}${endpoint}`, 
+                method: options.method || 'GET',
+                error: {
+                    code: lastError.code,
+                    message: lastError.message,
+                    userMessage: lastError.userMessage,
+                    retryable: lastError.retryable,
+                    status: lastError.status,
+                    totalAttempts: maxRetries + 1,
+                    finalAttempt: true
+                }
+            }
+        }));
         
-        const data = await response.json();
-        console.log(`✅ API Response: ${Array.isArray(data) ? data.length + ' items' : 'object'}`);
-        return data;
+        throw lastError;
+    }
+    
+    // Helper method to parse error responses
+    async parseErrorResponse(response) {
+        try {
+            const text = await response.text();
+            return JSON.parse(text);
+        } catch {
+            return { message: response.statusText || 'Unknown error' };
+        }
+    }
+    
+    // Helper method to determine if error is retryable
+    isRetryableError(status) {
+        // Retryable: 408, 429, 500, 502, 503, 504
+        return [408, 429, 500, 502, 503, 504].includes(status);
+    }
+    
+    // Helper method to get user-friendly error messages
+    getUserFriendlyMessage(status, errorData) {
+        switch (status) {
+            case 400: return 'Invalid request. Please check your input.';
+            case 401: return 'You are not authorized to perform this action.';
+            case 403: return 'Access denied. You don\'t have permission.';
+            case 404: return 'The requested item was not found.';
+            case 408: return 'Request timed out. Please try again.';
+            case 429: return 'Too many requests. Please wait and try again.';
+            case 500: return 'Server error. Please try again later.';
+            case 502: return 'Server temporarily unavailable. Please try again.';
+            case 503: return 'Service unavailable. Please try again later.';
+            case 504: return 'Gateway timeout. Please try again.';
+            default: return errorData.message || 'An error occurred. Please try again.';
+        }
     }
 
     async loadTasks() {
@@ -201,10 +404,10 @@ class ClioBoardApp {
         div.innerHTML = `
             <div class="flex items-start justify-between ${hasListItems || hasBottomContent ? 'mb-1' : ''}">
                 <div class="flex items-center flex-1 min-w-0 relative">
-                    <button class="task-complete-btn absolute left-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-all duration-200 hover:border-green-500 hover:shadow-sm ${task.status === 'completed' ? 'opacity-100 bg-green-500 border-green-500' : 'opacity-0 group-hover:opacity-100 border-gray-300'}" data-task-id="${task.id}">
-                        ${task.status === 'completed' ? '<i class="fas fa-check text-white text-xs"></i>' : ''}
+                    <button class="task-complete-btn absolute left-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-all duration-200 hover:border-green-500 hover:shadow-sm ${task.status === ClioBoardApp.TASK_STATUS.COMPLETED ? 'opacity-100 bg-green-500 border-green-500' : 'opacity-0 group-hover:opacity-100 border-gray-300'}" data-task-id="${task.id}">
+                        ${task.status === ClioBoardApp.TASK_STATUS.COMPLETED ? '<i class="fas fa-check text-white text-xs"></i>' : ''}
                     </button>
-                    <h3 class="text-sm font-medium min-w-0 flex-1 transition-all duration-200 truncate ${task.status === 'completed' ? 'text-gray-500 line-through ml-6' : isPaused ? 'text-gray-500 group-hover:ml-6' : 'text-gray-900 group-hover:ml-6'}">${this.escapeHtml(task.title)}</h3>
+                    <h3 class="text-sm font-medium min-w-0 flex-1 transition-all duration-200 truncate ${task.status === ClioBoardApp.TASK_STATUS.COMPLETED ? 'text-gray-500 line-through ml-6' : isPaused ? 'text-gray-500 group-hover:ml-6' : 'text-gray-900 group-hover:ml-6'}">${this.escapeHtml(task.title)}</h3>
                 </div>
                 ${minimizedRoutineTag ? `
                     <div class="flex items-center ml-1 mr-1">
@@ -239,88 +442,7 @@ class ClioBoardApp {
             ` : ''}
         `;
         
-        // Add click handlers
-        div.addEventListener('click', (e) => this.handleTaskClick(e, task));
-        
-        // Add completion button handler
-        const completeBtn = div.querySelector('.task-complete-btn');
-        if (completeBtn) {
-            completeBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent task edit modal
-                
-                // Double-click protection - ignore if already pending
-                if (this.pendingToggles.has(task.id)) {
-                    console.log(`⏳ Ignoring click on ${task.id} - already pending`);
-                    return;
-                }
-                
-                const newStatus = task.status === 'completed' ? 'pending' : 'completed';
-                
-                // Mark as pending to prevent double-clicks
-                this.pendingToggles.add(task.id);
-                
-                // Cancel any existing request for this task
-                const existingController = this.abortControllers.get(task.id);
-                if (existingController) {
-                    existingController.abort();
-                }
-                
-                // Optimistic UI - update immediately
-                const oldStatus = task.status;
-                task.status = newStatus;
-                this.updateTaskCardCompletionUI(div, newStatus);
-                
-                // Trigger confetti animation if completing the task
-                if (newStatus === 'completed') {
-                    this.triggerTaskCompletionConfetti(completeBtn);
-                }
-                
-                // Handle the toggle with error recovery
-                this.handleTaskToggleOptimistic(task.id, newStatus, oldStatus, div);
-            });
-        }
-
-        // Add menu button handler
-        const menuBtn = div.querySelector('.task-menu-btn');
-        const menu = div.querySelector('.task-menu');
-        if (menuBtn && menu) {
-            menuBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent task edit modal
-                
-                // Close any other open menus
-                document.querySelectorAll('.task-menu').forEach(m => {
-                    if (m !== menu) m.classList.add('hidden');
-                });
-                
-                // Toggle this menu
-                menu.classList.toggle('hidden');
-            });
-        }
-
-        // Add archive button handler (in dropdown menu)
-        const archiveBtn = div.querySelector('.archive-task-btn');
-        if (archiveBtn) {
-            archiveBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent task edit modal
-                this.handleTaskArchive(task.id);
-                // Close the menu after action
-                const menu = div.querySelector('.task-menu');
-                if (menu) menu.classList.add('hidden');
-            });
-        }
-        
-        // Add checkbox event listeners for list items
-        const checkboxes = div.querySelectorAll('.list-item-checkbox');
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', (e) => {
-                e.stopPropagation(); // Prevent task click
-                const taskId = checkbox.dataset.taskId;
-                const itemId = checkbox.dataset.itemId;
-                this.handleItemToggle(e, taskId, itemId);
-            });
-        });
-
-        // Add expand/collapse event listeners
+        // Initialize expand/collapse state (event delegation handles clicks)
         const expandBtn = div.querySelector('.expand-btn');
         const collapseBtn = div.querySelector('.collapse-btn');
         const hiddenItems = div.querySelector('.hidden-items');
@@ -329,46 +451,10 @@ class ClioBoardApp {
             // Check if this list should be expanded on render
             const isExpanded = this.expandedLists.has(task.id);
             if (isExpanded) {
-                hiddenItems.classList.remove('hidden');
-                expandBtn.classList.add('hidden');
-                collapseBtn.classList.remove('hidden');
+                hiddenItems.classList.remove(ClioBoardApp.CSS_CLASSES.HIDDEN);
+                expandBtn.classList.add(ClioBoardApp.CSS_CLASSES.HIDDEN);
+                collapseBtn.classList.remove(ClioBoardApp.CSS_CLASSES.HIDDEN);
             }
-
-            expandBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent task click
-                this.expandedLists.add(task.id); // Track expanded state
-                hiddenItems.classList.remove('hidden');
-                expandBtn.classList.add('hidden');
-                collapseBtn.classList.remove('hidden');
-                
-                // Add event listeners to newly shown checkboxes
-                const newCheckboxes = hiddenItems.querySelectorAll('.list-item-checkbox');
-                newCheckboxes.forEach(checkbox => {
-                    checkbox.addEventListener('change', (e) => {
-                        e.stopPropagation();
-                        const taskId = checkbox.dataset.taskId;
-                        const itemId = checkbox.dataset.itemId;
-                        this.handleItemToggle(e, taskId, itemId);
-                    });
-                });
-            });
-
-            collapseBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent task click
-                this.expandedLists.delete(task.id); // Remove from expanded state
-                hiddenItems.classList.add('hidden');
-                expandBtn.classList.remove('hidden');
-                collapseBtn.classList.add('hidden');
-            });
-        }
-        
-        // Add routine tag click handler for global toggle (Trello-style)
-        const routineTag = div.querySelector('.routine-tag, .routine-tag-minimized');
-        if (routineTag) {
-            routineTag.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent task edit modal
-                this.toggleRoutineTagsDisplay();
-            });
         }
         
         return div;
@@ -1235,6 +1321,9 @@ class ClioBoardApp {
             }
         });
         
+        // Event delegation for task card interactions
+        this.setupTaskEventDelegation();
+        
         // Routine management event listeners (add card is now created dynamically)
         
         const routineForm = document.getElementById('routine-form');
@@ -1319,6 +1408,538 @@ class ClioBoardApp {
         // Setup routine pickers for both modals
         this.setupRoutinePicker('task');
         this.setupRoutinePicker('edit-task');
+    }
+
+    // Network Connectivity Monitoring
+    setupNetworkMonitoring() {
+        console.log('🌐 Setting up network connectivity monitoring...');
+        
+        // Listen for online/offline events
+        window.addEventListener('online', () => {
+            console.log('🟢 Network connection restored');
+            this.isOnline = true;
+            this.connectionLossTime = null;
+            this.updateConnectionStatus(true);
+            
+            // Emit connectivity restored event
+            window.dispatchEvent(new CustomEvent('connectionRestored', {
+                detail: { timestamp: new Date().toISOString() }
+            }));
+        });
+        
+        window.addEventListener('offline', () => {
+            console.log('🔴 Network connection lost');
+            this.isOnline = false;
+            this.connectionLossTime = Date.now();
+            this.updateConnectionStatus(false);
+            
+            // Emit connectivity lost event
+            window.dispatchEvent(new CustomEvent('connectionLost', {
+                detail: { timestamp: new Date().toISOString() }
+            }));
+        });
+        
+        // Periodic connection health check (every 30 seconds when online)
+        setInterval(() => {
+            if (this.isOnline) {
+                this.performHealthCheck();
+            }
+        }, 30000);
+        
+        console.log('✅ Network monitoring setup complete');
+    }
+    
+    // Check server connectivity with a lightweight health check
+    async performHealthCheck() {
+        try {
+            const response = await fetch('/health', { 
+                method: 'GET',
+                signal: AbortSignal.timeout(5000) // 5 second timeout
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Health check failed: ${response.status}`);
+            }
+            
+            // Connection is healthy
+            if (!this.isOnline) {
+                console.log('🔄 Connection status updated to online via health check');
+                this.isOnline = true;
+                this.connectionLossTime = null;
+                this.updateConnectionStatus(true);
+            }
+            
+        } catch (error) {
+            // Health check failed - connection may be poor or server down
+            if (this.isOnline) {
+                console.log('⚠️ Health check failed, but navigator.onLine is true');
+                console.log('This may indicate server issues or poor connectivity');
+                
+                // Don't immediately mark as offline - wait for browser's offline event
+                // But we can emit a connectivity warning
+                window.dispatchEvent(new CustomEvent('connectionWarning', {
+                    detail: { 
+                        error: error.message,
+                        timestamp: new Date().toISOString()
+                    }
+                }));
+            }
+        }
+    }
+    
+    // Update UI based on connection status
+    updateConnectionStatus(isOnline) {
+        // Add/remove connection status indicator to the page
+        let statusIndicator = document.getElementById('connection-status');
+        
+        if (!statusIndicator) {
+            // Create status indicator if it doesn't exist
+            statusIndicator = document.createElement('div');
+            statusIndicator.id = 'connection-status';
+            statusIndicator.className = 'fixed top-16 left-0 right-0 z-40 text-center py-2 text-sm font-medium transition-all duration-300';
+            document.body.prepend(statusIndicator);
+        }
+        
+        if (isOnline) {
+            statusIndicator.className = 'fixed top-16 left-0 right-0 z-40 text-center py-2 text-sm font-medium transition-all duration-300 bg-green-600 text-white translate-y-0';
+            statusIndicator.textContent = '🟢 Connection restored';
+            
+            // Hide the indicator after 3 seconds
+            setTimeout(() => {
+                statusIndicator.style.transform = 'translateY(-100%)';
+            }, 3000);
+        } else {
+            statusIndicator.className = 'fixed top-16 left-0 right-0 z-40 text-center py-2 text-sm font-medium transition-all duration-300 bg-red-600 text-white translate-y-0';
+            statusIndicator.textContent = '🔴 No internet connection - working offline';
+            statusIndicator.style.transform = 'translateY(0)';
+        }
+    }
+    
+    // Check if we're currently online
+    isConnectionAvailable() {
+        return this.isOnline;
+    }
+    
+    // Get connection loss duration in seconds
+    getConnectionLossDuration() {
+        if (!this.connectionLossTime) return 0;
+        return Math.floor((Date.now() - this.connectionLossTime) / 1000);
+    }
+    
+    // Error Boundary and User Feedback System
+    setupErrorBoundary() {
+        console.log('🛡️ Setting up error boundary system...');
+        
+        // Track active error notifications
+        this.activeErrorNotifications = new Map();
+        
+        // Listen for network errors
+        window.addEventListener('networkError', (event) => {
+            const { url, method, error } = event.detail;
+            this.showErrorNotification(error, { url, method });
+        });
+        
+        // Listen for connection events
+        window.addEventListener('connectionLost', (event) => {
+            this.showOfflineNotification();
+        });
+        
+        window.addEventListener('connectionRestored', (event) => {
+            this.hideOfflineNotification();
+            this.showSuccessNotification('Connection restored! You are now online.');
+        });
+        
+        window.addEventListener('connectionWarning', (event) => {
+            const { error } = event.detail;
+            this.showWarningNotification(`Network issues detected: ${error}`);
+        });
+        
+        window.addEventListener('requestRetrySuccess', (event) => {
+            const { totalRetries } = event.detail;
+            this.showSuccessNotification(`Request succeeded after ${totalRetries} retries.`);
+        });
+        
+        console.log('✅ Error boundary system setup complete');
+    }
+    
+    // Show error notification with retry option
+    showErrorNotification(error, context = {}) {
+        const errorId = `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Create error notification element
+        const notification = document.createElement('div');
+        notification.id = errorId;
+        notification.className = 'fixed bottom-4 right-4 z-50 max-w-md bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full';
+        
+        const isRetryable = error.retryable && !error.offline;
+        const actionButtons = isRetryable ? 
+            `<button class="retry-btn bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 mr-2" data-url="${context.url}" data-method="${context.method}">
+                Retry
+            </button>` : '';
+        
+        notification.innerHTML = `
+            <div class="flex items-start">
+                <div class="flex-1">
+                    <div class="font-medium text-sm">
+                        ${error.code === 'OFFLINE' ? 'Offline' : 'Network Error'}
+                    </div>
+                    <div class="text-sm mt-1">
+                        ${error.userMessage || error.message}
+                    </div>
+                    ${error.totalAttempts ? `<div class="text-xs mt-1 opacity-75">Failed after ${error.totalAttempts} attempts</div>` : ''}
+                </div>
+                <div class="ml-3 flex-shrink-0">
+                    ${actionButtons}
+                    <button class="dismiss-btn text-red-400 hover:text-red-600" data-error-id="${errorId}">
+                        ✕
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Add to page
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+        
+        // Setup event listeners
+        const retryBtn = notification.querySelector('.retry-btn');
+        if (retryBtn) {
+            retryBtn.addEventListener('click', () => {
+                // Emit a retry request event
+                window.dispatchEvent(new CustomEvent('retryRequest', {
+                    detail: { 
+                        url: retryBtn.dataset.url,
+                        method: retryBtn.dataset.method
+                    }
+                }));
+                this.hideErrorNotification(errorId);
+            });
+        }
+        
+        const dismissBtn = notification.querySelector('.dismiss-btn');
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', () => {
+                this.hideErrorNotification(errorId);
+            });
+        }
+        
+        // Track the notification
+        this.activeErrorNotifications.set(errorId, notification);
+        
+        // Auto-dismiss after 8 seconds for non-critical errors
+        if (error.code !== 'OFFLINE' && !error.finalAttempt) {
+            setTimeout(() => {
+                this.hideErrorNotification(errorId);
+            }, 8000);
+        }
+        
+        return errorId;
+    }
+    
+    // Show success notification
+    showSuccessNotification(message, duration = 4000) {
+        const notification = document.createElement('div');
+        notification.className = 'fixed bottom-4 right-4 z-50 max-w-md bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full';
+        
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <div class="flex-1">
+                    <div class="text-sm">✅ ${message}</div>
+                </div>
+                <button class="ml-3 text-green-400 hover:text-green-600 dismiss-success">✕</button>
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+        
+        // Dismiss button
+        notification.querySelector('.dismiss-success').addEventListener('click', () => {
+            this.hideNotification(notification);
+        });
+        
+        // Auto-dismiss
+        setTimeout(() => {
+            this.hideNotification(notification);
+        }, duration);
+    }
+    
+    // Show warning notification
+    showWarningNotification(message, duration = 6000) {
+        const notification = document.createElement('div');
+        notification.className = 'fixed bottom-4 right-4 z-50 max-w-md bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full';
+        
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <div class="flex-1">
+                    <div class="text-sm">⚠️ ${message}</div>
+                </div>
+                <button class="ml-3 text-yellow-400 hover:text-yellow-600 dismiss-warning">✕</button>
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+        
+        // Dismiss button
+        notification.querySelector('.dismiss-warning').addEventListener('click', () => {
+            this.hideNotification(notification);
+        });
+        
+        // Auto-dismiss
+        setTimeout(() => {
+            this.hideNotification(notification);
+        }, duration);
+    }
+    
+    // Show persistent offline notification
+    showOfflineNotification() {
+        if (document.getElementById('offline-notification')) return; // Already showing
+        
+        const notification = document.createElement('div');
+        notification.id = 'offline-notification';
+        notification.className = 'fixed bottom-4 left-4 z-50 bg-gray-800 text-white px-4 py-3 rounded-lg shadow-lg';
+        
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <div class="text-sm">
+                    🔴 You are offline - changes will be saved when you reconnect
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+    }
+    
+    // Hide offline notification
+    hideOfflineNotification() {
+        const notification = document.getElementById('offline-notification');
+        if (notification) {
+            notification.remove();
+        }
+    }
+    
+    // Hide error notification
+    hideErrorNotification(errorId) {
+        const notification = this.activeErrorNotifications.get(errorId);
+        if (notification) {
+            this.hideNotification(notification);
+            this.activeErrorNotifications.delete(errorId);
+        }
+    }
+    
+    // Generic notification hiding with animation
+    hideNotification(notification) {
+        notification.style.transform = 'translateX(full)';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }
+    
+    // Enhanced error messages for common scenarios
+    getContextualErrorMessage(error, context = {}) {
+        const { url, method } = context;
+        
+        if (error.code === 'OFFLINE') {
+            return 'You appear to be offline. Please check your internet connection and try again.';
+        }
+        
+        if (error.code === 'NETWORK_TIMEOUT') {
+            return 'The request is taking longer than expected. This might be due to a slow connection or server issues.';
+        }
+        
+        if (error.code === 'RATE_LIMIT_EXCEEDED') {
+            return 'Too many requests. Please wait a moment before trying again.';
+        }
+        
+        if (error.status === 404) {
+            if (url && url.includes('/tasks/')) {
+                return 'The requested task could not be found. It may have been deleted by another user.';
+            }
+            if (url && url.includes('/routines/')) {
+                return 'The requested routine could not be found. It may have been deleted by another user.';
+            }
+            return 'The requested resource was not found.';
+        }
+        
+        if (error.status === 500) {
+            return 'A server error occurred. Our team has been notified and is working on a fix.';
+        }
+        
+        return error.userMessage || error.message || 'An unexpected error occurred. Please try again.';
+    }
+    
+    // Event Delegation System for Task Cards
+    setupTaskEventDelegation() {
+        console.log('🎯 Setting up task event delegation...');
+        
+        // Single delegated click handler for all task card interactions
+        document.addEventListener('click', (e) => {
+            // Task completion button
+            if (e.target.matches(`.${ClioBoardApp.CSS_CLASSES.TASK_COMPLETE_BTN}`) || e.target.closest(`.${ClioBoardApp.CSS_CLASSES.TASK_COMPLETE_BTN}`)) {
+                const completeBtn = e.target.closest(`.${ClioBoardApp.CSS_CLASSES.TASK_COMPLETE_BTN}`);
+                const taskCard = completeBtn.closest(`.${ClioBoardApp.CSS_CLASSES.TASK_CARD}`);
+                const taskId = parseInt(taskCard.dataset.taskId);
+                const task = this.findTaskById(taskId);
+                
+                if (!task) return;
+                
+                e.stopPropagation();
+                
+                // Double-click protection
+                if (this.pendingToggles.has(task.id)) {
+                    console.log(`⏳ Ignoring click on ${task.id} - already pending`);
+                    return;
+                }
+                
+                const newStatus = task.status === ClioBoardApp.TASK_STATUS.COMPLETED ? ClioBoardApp.TASK_STATUS.PENDING : ClioBoardApp.TASK_STATUS.COMPLETED;
+                
+                // Mark as pending
+                this.pendingToggles.add(task.id);
+                
+                // Cancel existing request
+                const existingController = this.abortControllers.get(task.id);
+                if (existingController) {
+                    existingController.abort();
+                }
+                
+                // Optimistic UI update
+                const oldStatus = task.status;
+                task.status = newStatus;
+                this.updateTaskCardCompletionUI(taskCard, newStatus);
+                
+                // Trigger confetti if completing
+                if (newStatus === ClioBoardApp.TASK_STATUS.COMPLETED) {
+                    this.triggerTaskCompletionConfetti(completeBtn);
+                }
+                
+                // Handle toggle with error recovery
+                this.handleTaskToggleOptimistic(task.id, newStatus, oldStatus, taskCard);
+                return;
+            }
+            
+            // Task menu button
+            if (e.target.matches('.task-menu-btn') || e.target.closest('.task-menu-btn')) {
+                const menuBtn = e.target.closest('.task-menu-btn');
+                const taskCard = menuBtn.closest('.task-card');
+                const menu = taskCard.querySelector('.task-menu');
+                
+                e.stopPropagation();
+                
+                // Close other menus
+                document.querySelectorAll('.task-menu').forEach(m => {
+                    if (m !== menu) m.classList.add('hidden');
+                });
+                
+                // Toggle this menu
+                if (menu) menu.classList.toggle('hidden');
+                return;
+            }
+            
+            // Archive button
+            if (e.target.matches('.archive-task-btn') || e.target.closest('.archive-task-btn')) {
+                const archiveBtn = e.target.closest('.archive-task-btn');
+                const taskCard = archiveBtn.closest('.task-card');
+                const taskId = parseInt(taskCard.dataset.taskId);
+                
+                e.stopPropagation();
+                
+                this.handleTaskArchive(taskId);
+                
+                // Close menu
+                const menu = taskCard.querySelector('.task-menu');
+                if (menu) menu.classList.add('hidden');
+                return;
+            }
+            
+            // Expand button
+            if (e.target.matches('.expand-btn') || e.target.closest('.expand-btn')) {
+                const expandBtn = e.target.closest('.expand-btn');
+                const taskCard = expandBtn.closest('.task-card');
+                const taskId = parseInt(taskCard.dataset.taskId);
+                const hiddenItems = taskCard.querySelector('.hidden-items');
+                const collapseBtn = taskCard.querySelector('.collapse-btn');
+                
+                e.stopPropagation();
+                
+                this.expandedLists.add(taskId);
+                if (hiddenItems) hiddenItems.classList.remove('hidden');
+                expandBtn.classList.add('hidden');
+                if (collapseBtn) collapseBtn.classList.remove('hidden');
+                return;
+            }
+            
+            // Collapse button
+            if (e.target.matches('.collapse-btn') || e.target.closest('.collapse-btn')) {
+                const collapseBtn = e.target.closest('.collapse-btn');
+                const taskCard = collapseBtn.closest('.task-card');
+                const taskId = parseInt(taskCard.dataset.taskId);
+                const hiddenItems = taskCard.querySelector('.hidden-items');
+                const expandBtn = taskCard.querySelector('.expand-btn');
+                
+                e.stopPropagation();
+                
+                this.expandedLists.delete(taskId);
+                if (hiddenItems) hiddenItems.classList.add('hidden');
+                collapseBtn.classList.add('hidden');
+                if (expandBtn) expandBtn.classList.remove('hidden');
+                return;
+            }
+            
+            // Routine tag click (for global toggle - Trello-style)
+            if (e.target.matches('.routine-tag, .routine-tag-minimized') || e.target.closest('.routine-tag, .routine-tag-minimized')) {
+                e.stopPropagation();
+                this.toggleRoutineTagsDisplay();
+                return;
+            }
+            
+            // Task card click (for edit)
+            if (e.target.closest('.task-card')) {
+                const taskCard = e.target.closest('.task-card');
+                const taskId = parseInt(taskCard.dataset.taskId);
+                const task = this.findTaskById(taskId);
+                
+                if (!task) return;
+                
+                // Only handle if not clicking on other interactive elements
+                if (!e.target.closest('.task-complete-btn, .task-menu-btn, .expand-btn, .collapse-btn, .routine-tag, .list-item-checkbox, .archive-task-btn')) {
+                    this.handleTaskClick(e, task);
+                }
+                return;
+            }
+        });
+        
+        // Separate delegated handler for checkboxes (change event)
+        document.addEventListener('change', (e) => {
+            if (e.target.matches('.list-item-checkbox')) {
+                e.stopPropagation();
+                const taskId = e.target.dataset.taskId;
+                const itemId = e.target.dataset.itemId;
+                this.handleItemToggle(e, taskId, itemId);
+            }
+        });
+        
+        console.log('✅ Task event delegation setup complete');
+    }
+    
+    // Helper method to find task by ID
+    findTaskById(id) {
+        return this.tasks.find(task => task.id === id) || 
+               this.archivedTasks.find(task => task.id === id);
     }
 
     // Routine Picker Methods
