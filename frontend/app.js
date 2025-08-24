@@ -108,11 +108,14 @@ class ClioBoardApp {
         return newTask;
     }
 
-    async moveTask(taskId, newColumn) {
-        console.log(`🔄 Moving task ${taskId} to ${newColumn}`);
+    async moveTask(taskId, newColumn, newPosition = null) {
+        console.log(`🔄 Moving task ${taskId} to ${newColumn} at position ${newPosition}`);
         const updatedTask = await this.apiCall(`/api/tasks/${taskId}/move`, {
             method: 'PUT',
-            body: JSON.stringify({ column: newColumn })
+            body: JSON.stringify({ 
+                column: newColumn,
+                position: newPosition 
+            })
         });
         
         // Update local data
@@ -955,10 +958,22 @@ class ClioBoardApp {
         // Close modal on escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                this.closeAddTaskModal();
-                this.closeEditTaskModal();
-                this.closeArchiveModal();
-                this.closeRoutineModal();
+                // Close modals in priority order - close topmost modal first
+                const addTaskModal = document.getElementById('add-task-modal');
+                const editTaskModal = document.getElementById('edit-task-modal');
+                const archiveModal = document.getElementById('archive-modal');
+                const routineModal = document.getElementById('routine-modal');
+                
+                // Check task modals first (they have higher z-index)
+                if (addTaskModal && !addTaskModal.classList.contains('hidden')) {
+                    this.closeAddTaskModal();
+                } else if (editTaskModal && !editTaskModal.classList.contains('hidden')) {
+                    this.closeEditTaskModal();
+                } else if (archiveModal && !archiveModal.classList.contains('hidden')) {
+                    this.closeArchiveModal();
+                } else if (routineModal && !routineModal.classList.contains('hidden')) {
+                    this.closeRoutineModal();
+                }
             }
         });
 
@@ -2553,13 +2568,19 @@ class ClioBoardApp {
     }
 
     // Modal Management
-    openAddTaskModal(defaultColumn = 'today') {
+    openAddTaskModal(defaultColumn = 'today', routineId = null) {
         const modal = document.getElementById('add-task-modal');
         const columnSelect = document.getElementById('task-column');
+        const routineSelect = document.getElementById('task-routine');
         
         // Store the selected column for use when submitting
         this.selectedColumn = defaultColumn;
         columnSelect.value = defaultColumn;
+        
+        // Pre-select routine if provided
+        if (routineId && routineSelect) {
+            routineSelect.value = routineId;
+        }
         
         // Clear any previous list items and add one empty field (but don't focus it)
         document.getElementById('list-items-container').innerHTML = '';
@@ -3332,8 +3353,17 @@ class ClioBoardApp {
         
         if (!taskId || !newColumn) return;
         
+        // Calculate the actual position (DOM index might include ghost card)
+        // Get all task cards in the new column (excluding ghost card)
+        const columnContainer = evt.to;
+        const allCards = Array.from(columnContainer.querySelectorAll('.task-card'));
+        const taskIndex = allCards.findIndex(card => card.getAttribute('data-task-id') === taskId);
+        const newPosition = taskIndex >= 0 ? taskIndex : 0;
+        
+        console.log(`📍 Task moved to position ${newPosition} in ${newColumn} column`);
+        
         try {
-            await this.moveTask(taskId, newColumn);
+            await this.moveTask(taskId, newColumn, newPosition);
             this.updateTaskCounts();
         } catch (error) {
             console.error('Failed to move task:', error);
@@ -3593,7 +3623,7 @@ class ClioBoardApp {
             <p class="text-gray-600 text-sm mb-3 truncate min-h-[1.25rem]">${routine.description ? this.escapeHtml(routine.description) : ''}</p>
             <div class="relative flex items-center justify-between">
                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colorClass === 'custom-brown-card' ? '' : colorClass}" ${colorClass === 'custom-brown-card' ? 'style="background-color: #e8d8cf; color: #73513b;"' : ''}>
-                    ${(parseInt(routine.pending_tasks || 0) + parseInt(routine.completed_tasks || 0))} tasks
+                    ${(parseInt(routine.pending_tasks || 0) + parseInt(routine.completed_tasks || 0))} Active${parseInt(routine.archived_tasks || 0) > 0 ? `<span class="text-[10px] opacity-75 ml-0.5"> / ${routine.archived_tasks} Archived</span>` : ''}
                 </span>
                 ${routine.achievable ? '<div class="absolute left-1/2 transform -translate-x-1/2"><span class="text-xs text-gray-500">Achievable</span></div>' : ''}
                 <div class="text-right">
@@ -3799,6 +3829,9 @@ class ClioBoardApp {
     
     async loadRoutineItems(routine) {
         try {
+            // Store current routine for ghost cards
+            this.currentRoutine = routine;
+            
             // Load tasks for this routine
             const tasks = await this.apiCall(`/api/routines/${routine.id}/tasks`);
             this.renderRoutineTasks(tasks);
@@ -3819,38 +3852,142 @@ class ClioBoardApp {
         const container = document.getElementById('routine-tasks-list');
         const countElement = document.getElementById('routine-tasks-count');
         
-        countElement.textContent = `${tasks.length} tasks`;
+        // Filter out archived tasks
+        const activeTasks = tasks.filter(task => !task.is_archived);
+        const archivedCount = tasks.length - activeTasks.length;
         
-        if (tasks.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-sm">No tasks found for this routine.</p>';
-            return;
-        }
+        countElement.textContent = `${activeTasks.length} tasks`;
         
         container.innerHTML = '';
-        tasks.forEach(task => {
-            const div = document.createElement('div');
-            div.className = 'bg-white rounded-lg p-3 border border-gray-200 hover:shadow-sm transition-shadow';
-            
-            const statusIcon = task.status === 'completed' ? '✅' : '📋';
-            const dueDate = task.due_date ? 
-                new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-            
-            div.innerHTML = `
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-2">
-                        <span class="text-sm">${statusIcon}</span>
-                        <span class="text-sm font-medium ${task.status === 'completed' ? 'line-through text-gray-500' : ''}">${this.escapeHtml(task.title)}</span>
-                        <span class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">${task.column_name || task.column}</span>
+        
+        if (activeTasks.length === 0) {
+            const noTasksMsg = document.createElement('p');
+            noTasksMsg.className = 'text-gray-500 text-sm mb-3';
+            noTasksMsg.textContent = 'No tasks found for this routine.';
+            container.appendChild(noTasksMsg);
+        } else {
+            activeTasks.forEach(task => {
+                const div = document.createElement('div');
+                div.className = 'bg-white rounded-lg p-3 border border-gray-200 hover:shadow-sm hover:border-blue-400 hover:border-2 transition-all cursor-pointer';
+                div.setAttribute('data-task-id', task.id);
+                
+                const dueDate = task.due_date ? 
+                    new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+                
+                div.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" ${task.status === 'completed' ? 'checked' : ''} 
+                                   class="task-checkbox w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
+                                   data-task-id="${task.id}">
+                            <span class="text-sm font-medium ${task.status === 'completed' ? 'line-through text-gray-500' : ''} cursor-pointer task-title">${this.escapeHtml(task.title)}</span>
+                            <span class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">${task.column_name || task.column}</span>
+                        </div>
+                        <div class="flex items-center space-x-2 text-xs text-gray-500">
+                            ${dueDate ? `<span><i class="fas fa-calendar mr-1"></i>${dueDate}</span>` : ''}
+                            ${task.type === 'list' ? '<span><i class="fas fa-list mr-1"></i>List</span>' : ''}
+                        </div>
                     </div>
-                    <div class="flex items-center space-x-2 text-xs text-gray-500">
-                        ${dueDate ? `<span><i class="fas fa-calendar mr-1"></i>${dueDate}</span>` : ''}
-                        ${task.type === 'list' ? '<span><i class="fas fa-list mr-1"></i>List</span>' : ''}
-                    </div>
-                </div>
-            `;
+                `;
+                
+                // Add checkbox handler for task completion with confetti!
+                const checkbox = div.querySelector('.task-checkbox');
+                checkbox.addEventListener('change', async (e) => {
+                    e.stopPropagation();
+                    const newStatus = e.target.checked ? 'completed' : 'pending';
+                    const oldStatus = task.status;
+                    
+                    // Update task status optimistically
+                    task.status = newStatus;
+                    
+                    // Update UI optimistically
+                    const taskTitle = div.querySelector('.task-title');
+                    if (newStatus === 'completed') {
+                        taskTitle.classList.add('line-through', 'text-gray-500');
+                        taskTitle.classList.remove('text-gray-700');
+                        // Trigger confetti for completion
+                        this.triggerTaskCompletionConfetti(checkbox);
+                    } else {
+                        taskTitle.classList.remove('line-through', 'text-gray-500');
+                        taskTitle.classList.add('text-gray-700');
+                    }
+                    
+                    // Make API call
+                    try {
+                        await this.apiCall(`/api/tasks/${task.id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ status: newStatus })
+                        });
+                        
+                        // Update routine counts without full re-render
+                        await this.loadRoutines();
+                        this.updateTaskCounts();
+                        
+                    } catch (error) {
+                        console.error('Failed to toggle task completion:', error);
+                        
+                        // Revert optimistic changes
+                        task.status = oldStatus;
+                        checkbox.checked = oldStatus === 'completed';
+                        
+                        if (oldStatus === 'completed') {
+                            taskTitle.classList.add('line-through', 'text-gray-500');
+                            taskTitle.classList.remove('text-gray-700');
+                        } else {
+                            taskTitle.classList.remove('line-through', 'text-gray-500');
+                            taskTitle.classList.add('text-gray-700');
+                        }
+                        
+                        this.showError('Failed to update task - reverted changes');
+                    }
+                });
+                
+                // Add click handler to task title to open edit modal
+                const taskTitle = div.querySelector('.task-title');
+                taskTitle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.openEditTaskModal(task);
+                });
+                
+                container.appendChild(div);
+            });
+        }
+        
+        // Add 4 mini ghost cards at the bottom for creating tasks in each column
+        const ghostCardsContainer = document.createElement('div');
+        ghostCardsContainer.className = 'mt-3 flex gap-1';
+        
+        const columns = [
+            { name: 'today', label: 'Today' },
+            { name: 'tomorrow', label: 'Tomorrow' },
+            { name: 'this_week', label: 'This Week' },
+            { name: 'horizon', label: 'Horizon' }
+        ];
+        
+        columns.forEach(column => {
+            const ghostCard = document.createElement('button');
+            ghostCard.className = 'flex-1 bg-transparent border border-dashed border-gray-300 border-opacity-50 rounded px-2 py-1 hover:border-opacity-100 hover:border-blue-400 hover:bg-blue-50 hover:bg-opacity-60 transition-all duration-200 cursor-pointer text-gray-400 hover:text-blue-500 text-xs';
             
-            container.appendChild(div);
+            ghostCard.innerHTML = `+ ${column.label}`;
+            
+            // Add click handler to open add task modal with this column and current routine pre-selected
+            ghostCard.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.openAddTaskModal(column.name, this.currentRoutine?.id);
+            });
+            
+            ghostCardsContainer.appendChild(ghostCard);
         });
+        
+        container.appendChild(ghostCardsContainer);
+        
+        // Add archived task count if there are archived tasks
+        if (archivedCount > 0) {
+            const archivedCountElement = document.createElement('div');
+            archivedCountElement.className = 'mt-3 pt-2 border-t border-gray-200 text-center text-xs text-gray-400';
+            archivedCountElement.textContent = `${archivedCount} Archived Task${archivedCount === 1 ? '' : 's'}`;
+            container.appendChild(archivedCountElement);
+        }
     }
     
     renderRoutineNotes(notes) {

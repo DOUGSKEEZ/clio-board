@@ -48,10 +48,29 @@ class TaskService {
         values.push(filters.routine_id);
       }
 
-      query += ' ORDER BY t.column_name, t.position';
+      query += ' ORDER BY t.column_name, t.position, t.created_at';
 
       const result = await pool.query(query, values);
-      return result.rows;
+      
+      // Normalize positions within each column (0, 1, 2, ...)
+      const tasks = result.rows;
+      const tasksByColumn = {};
+      
+      tasks.forEach(task => {
+        if (!tasksByColumn[task.column_name]) {
+          tasksByColumn[task.column_name] = [];
+        }
+        tasksByColumn[task.column_name].push(task);
+      });
+      
+      // Assign normalized positions
+      Object.keys(tasksByColumn).forEach(column => {
+        tasksByColumn[column].forEach((task, index) => {
+          task.position = index;
+        });
+      });
+      
+      return tasks;
     } catch (error) {
       logger.error('Error fetching tasks', { error: error.message });
       throw error;
@@ -513,22 +532,152 @@ class TaskService {
    * @param {Number} newPosition - New position (optional)
    * @returns {Object} Updated task
    */
+  /**
+   * Renumber all task positions in a column to be sequential (0, 1, 2, ...)
+   */
+  async renumberColumnPositions(column) {
+    try {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        
+        // Get all tasks in the column ordered by current position
+        const result = await client.query(`
+          SELECT id FROM tasks 
+          WHERE column_name = $1 AND is_archived = false 
+          ORDER BY position, created_at
+        `, [column]);
+        
+        // Update each task with its new sequential position
+        for (let i = 0; i < result.rows.length; i++) {
+          await client.query(
+            'UPDATE tasks SET position = $1 WHERE id = $2',
+            [i, result.rows[i].id]
+          );
+        }
+        
+        await client.query('COMMIT');
+        logger.debug('Renumbered positions for column', { column, count: result.rows.length });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      logger.error('Error renumbering positions', { error: error.message, column });
+      throw error;
+    }
+  }
+
   async moveTask(taskId, newColumn, newPosition = null) {
     try {
-      if (!newPosition) {
+      // Get the current task to check if it's moving within the same column
+      const currentTaskResult = await pool.query(
+        'SELECT column_name, position FROM tasks WHERE id = $1',
+        [taskId]
+      );
+      const currentTask = currentTaskResult.rows[0];
+      
+      if (!currentTask) {
+        throw new Error('Task not found');
+      }
+      
+      const oldColumn = currentTask.column_name;
+      const oldPosition = currentTask.position;
+      
+      // If no position specified, add to the end
+      if (newPosition === null || newPosition === undefined) {
         newPosition = await this.getNextPosition(newColumn);
       }
-
-      const query = `
-        UPDATE tasks
-        SET column_name = $1, position = $2, updated_at = NOW()
-        WHERE id = $3
-        RETURNING *
-      `;
-
-      const result = await pool.query(query, [newColumn, newPosition, taskId]);
-      logger.info('Task moved', { taskId, newColumn, newPosition });
-      return result.rows[0];
+      
+      logger.info('Move task details', { 
+        taskId, 
+        oldColumn, 
+        oldPosition, 
+        newColumn, 
+        newPosition 
+      });
+      
+      // Begin transaction to ensure consistency
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        
+        // If moving within the same column
+        if (oldColumn === newColumn) {
+          if (oldPosition !== newPosition) {
+            // Shift positions of other tasks
+            if (newPosition < oldPosition) {
+              // Moving up: shift tasks down between new and old position
+              await client.query(`
+                UPDATE tasks 
+                SET position = position + 1, updated_at = NOW()
+                WHERE column_name = $1 
+                  AND position >= $2 
+                  AND position < $3 
+                  AND id != $4
+                  AND is_archived = false
+              `, [newColumn, newPosition, oldPosition, taskId]);
+            } else {
+              // Moving down: shift tasks up between old and new position
+              await client.query(`
+                UPDATE tasks 
+                SET position = position - 1, updated_at = NOW()
+                WHERE column_name = $1 
+                  AND position > $2 
+                  AND position <= $3 
+                  AND id != $4
+                  AND is_archived = false
+              `, [newColumn, oldPosition, newPosition, taskId]);
+            }
+          }
+        } else {
+          // Moving to different column
+          // Shift tasks down in the new column to make room
+          await client.query(`
+            UPDATE tasks 
+            SET position = position + 1, updated_at = NOW()
+            WHERE column_name = $1 
+              AND position >= $2 
+              AND is_archived = false
+          `, [newColumn, newPosition]);
+          
+          // Shift tasks up in the old column to fill the gap
+          await client.query(`
+            UPDATE tasks 
+            SET position = position - 1, updated_at = NOW()
+            WHERE column_name = $1 
+              AND position > $2 
+              AND is_archived = false
+          `, [oldColumn, oldPosition]);
+        }
+        
+        // Update the task itself
+        const updateResult = await client.query(`
+          UPDATE tasks
+          SET column_name = $1, position = $2, updated_at = NOW()
+          WHERE id = $3
+          RETURNING *
+        `, [newColumn, newPosition, taskId]);
+        
+        await client.query('COMMIT');
+        
+        // Renumber positions to keep them sequential
+        await this.renumberColumnPositions(newColumn);
+        if (oldColumn !== newColumn) {
+          await this.renumberColumnPositions(oldColumn);
+        }
+        
+        logger.info('Task moved', { taskId, oldColumn, oldPosition, newColumn, newPosition });
+        return updateResult.rows[0];
+        
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
     } catch (error) {
       logger.error('Error moving task', { error: error.message, taskId });
       throw error;

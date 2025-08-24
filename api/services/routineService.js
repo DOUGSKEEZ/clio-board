@@ -12,8 +12,9 @@ class RoutineService {
     try {
       let query = `
         SELECT r.*,
-               COUNT(DISTINCT t.id) FILTER (WHERE t.status = 'pending') as pending_tasks,
-               COUNT(DISTINCT t.id) FILTER (WHERE t.status = 'completed') as completed_tasks
+               COUNT(DISTINCT t.id) FILTER (WHERE t.status = 'pending' AND t.is_archived = false) as pending_tasks,
+               COUNT(DISTINCT t.id) FILTER (WHERE t.status = 'completed' AND t.is_archived = false) as completed_tasks,
+               COUNT(DISTINCT t.id) FILTER (WHERE t.is_archived = true) as archived_tasks
         FROM routines r
         LEFT JOIN tasks t ON r.id = t.routine_id
       `;
