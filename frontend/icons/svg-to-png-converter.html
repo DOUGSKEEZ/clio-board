@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SVG to PNG Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .preview {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin: 30px 0;
+            justify-content: center;
+        }
+        .icon-box {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        .icon-box img {
+            display: block;
+            margin: 10px auto;
+            border: 1px solid #ccc;
+            background: white;
+        }
+        button {
+            background: #0052CC;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0747A6;
+        }
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .success {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 SVG to PNG Converter for Dark Icons</h1>
+        
+        <div class="instructions">
+            <p><strong>Instructions:</strong></p>
+            <ol>
+                <li>Click each button below to download the PNG in that size</li>
+                <li>Save each file with the exact name shown</li>
+                <li>Place them in the <code>frontend/icons/mono/</code> directory</li>
+                <li>Overwrite the existing files</li>
+            </ol>
+        </div>
+
+        <div id="status"></div>
+
+        <div class="preview" id="preview"></div>
+    </div>
+
+    <script>
+        // The SVG content for dark icons
+        const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" id="trello">
+  <!-- Board outline -->
+  <path fill="#444" d="M28.482 4.844v22.883c0 .282-.103.526-.309.732s-.45.309-.731.309H4.559c-.282 0-.525-.103-.731-.309s-.309-.45-.309-.732V4.844c0-.282.103-.526.309-.731s.45-.309.731-.309h22.883c.282 0 .526.103.731.309s.309.45.309.731z"></path>
+  <!-- White card fills -->
+  <rect x="6.119" y="6.405" width="8.321" height="17.162" rx="0.374" ry="0.374" fill="white"/>
+  <rect x="17.04" y="6.405" width="8.321" height="10.921" rx="0.374" ry="0.374" fill="white"/>
+</svg>`;
+
+        const sizes = [16, 32, 192, 512];
+        const previewContainer = document.getElementById('preview');
+
+        function svgToPng(svgString, width, height, callback) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = width;
+            canvas.height = height;
+
+            const img = new Image();
+            // Convert SVG to base64 data URL instead of blob
+            const base64 = btoa(unescape(encodeURIComponent(svgString)));
+            const dataUrl = 'data:image/svg+xml;base64,' + base64;
+
+            img.onload = function() {
+                ctx.drawImage(img, 0, 0, width, height);
+                callback(canvas.toDataURL('image/png'));
+            };
+
+            img.src = dataUrl;
+        }
+
+        function downloadPng(dataUrl, filename) {
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            document.getElementById('status').innerHTML = `Downloaded: ${filename}`;
+            document.getElementById('status').className = 'success';
+        }
+
+        // Generate previews and download buttons
+        sizes.forEach(size => {
+            svgToPng(svgContent, size, size, (dataUrl) => {
+                const box = document.createElement('div');
+                box.className = 'icon-box';
+                
+                const img = document.createElement('img');
+                img.src = dataUrl;
+                img.width = Math.min(size, 128);
+                img.height = Math.min(size, 128);
+                
+                const label = document.createElement('div');
+                label.innerHTML = `<strong>trello-${size}.png</strong><br>${size}x${size}px`;
+                
+                const button = document.createElement('button');
+                button.textContent = `Download ${size}x${size}`;
+                button.onclick = () => downloadPng(dataUrl, `trello-${size}.png`);
+                
+                box.appendChild(label);
+                box.appendChild(img);
+                box.appendChild(button);
+                previewContainer.appendChild(box);
+            });
+        });
+    </script>
+</body>
+</html>
