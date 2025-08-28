@@ -34,7 +34,12 @@ class NoteService {
         values.push(filters.column_position);
       }
 
-      query += ' ORDER BY n.column_position, n.created_at DESC';
+      if (filters.routine_id) {
+        query += ` AND n.routine_id = $${++paramCount}`;
+        values.push(filters.routine_id);
+      }
+
+      query += ' ORDER BY n.column_position, n.position, n.created_at DESC';
 
       const result = await pool.query(query, values);
       return result.rows;
@@ -151,7 +156,7 @@ class NoteService {
    */
   async updateNote(noteId, updates) {
     try {
-      const allowedFields = ['title', 'content', 'column_position'];
+      const allowedFields = ['title', 'content', 'column_position', 'routine_id', 'task_id'];
       const setClause = [];
       const values = [];
       let paramCount = 1;
@@ -317,23 +322,38 @@ class NoteService {
    * Move note to different column
    * @param {String} noteId - Note ID
    * @param {Number} newColumn - New column position (1-4)
+   * @param {Number} newPosition - Position within the column
    * @returns {Object} Updated note
    */
-  async moveNote(noteId, newColumn) {
+  async moveNote(noteId, newColumn, newPosition = null) {
     try {
       if (newColumn < 1 || newColumn > 4) {
         throw new Error('Column position must be between 1 and 4');
       }
 
-      const query = `
-        UPDATE notes
-        SET column_position = $1, updated_at = NOW()
-        WHERE id = $2
-        RETURNING *
-      `;
+      let query;
+      let values;
+      
+      if (newPosition !== null && newPosition !== undefined) {
+        query = `
+          UPDATE notes
+          SET column_position = $1, position = $2, updated_at = NOW()
+          WHERE id = $3
+          RETURNING *
+        `;
+        values = [newColumn, newPosition, noteId];
+      } else {
+        query = `
+          UPDATE notes
+          SET column_position = $1, updated_at = NOW()
+          WHERE id = $2
+          RETURNING *
+        `;
+        values = [newColumn, noteId];
+      }
 
-      const result = await pool.query(query, [newColumn, noteId]);
-      logger.info('Note moved', { noteId, newColumn });
+      const result = await pool.query(query, values);
+      logger.info('Note moved', { noteId, newColumn, newPosition });
       return result.rows[0];
     } catch (error) {
       logger.error('Error moving note', { error: error.message, noteId });

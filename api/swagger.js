@@ -156,6 +156,72 @@ const swaggerDefinition = {
         },
         required: ['title']
       },
+      Note: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+            description: 'Note ID'
+          },
+          title: {
+            type: 'string',
+            nullable: true,
+            description: 'Note title (optional)'
+          },
+          content: {
+            type: 'string',
+            description: 'Note content'
+          },
+          type: {
+            type: 'string',
+            enum: ['user', 'agent'],
+            description: 'Note type (auto-detected from request source)'
+          },
+          source: {
+            type: 'string',
+            enum: ['manual', 'voice', 'conversation', 'claude_api'],
+            description: 'How the note was created'
+          },
+          column_position: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 4,
+            nullable: true,
+            description: 'Column position (1-2 user, 3-4 agent)'
+          },
+          task_id: {
+            type: 'string',
+            format: 'uuid',
+            nullable: true,
+            description: 'Associated task ID'
+          },
+          routine_id: {
+            type: 'string',
+            format: 'uuid',
+            nullable: true,
+            description: 'Associated routine ID'
+          },
+          is_archived: {
+            type: 'boolean',
+            description: 'Archive state'
+          },
+          created_at: {
+            type: 'string',
+            format: 'date-time'
+          },
+          updated_at: {
+            type: 'string',
+            format: 'date-time'
+          },
+          archived_at: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true
+          }
+        },
+        required: ['content']
+      },
       Error: {
         type: 'object',
         properties: {

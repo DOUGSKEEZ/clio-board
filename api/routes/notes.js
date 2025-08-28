@@ -64,7 +64,8 @@ router.get('/', async (req, res, next) => {
   try {
     const filters = {
       type: req.query.type,
-      column_position: req.query.column_position ? parseInt(req.query.column_position) : undefined
+      column_position: req.query.column_position ? parseInt(req.query.column_position) : undefined,
+      routine_id: req.query.routine_id
     };
     
     const notes = await noteService.getNotes(filters);
@@ -314,7 +315,7 @@ router.put('/:id/move',
   createAuditMiddleware('move_note', 'note'),
   async (req, res, next) => {
     try {
-      const { column } = req.body;
+      const { column, position } = req.body;
       
       if (!column || column < 1 || column > 4) {
         return res.status(400).json({ error: 'Column must be between 1 and 4' });
@@ -327,7 +328,7 @@ router.put('/:id/move',
         return res.status(404).json({ error: 'Note not found' });
       }
 
-      const movedNote = await noteService.moveNote(noteId, column);
+      const movedNote = await noteService.moveNote(noteId, column, position);
       
       // Audit log
       await req.audit(noteId, originalNote, movedNote);

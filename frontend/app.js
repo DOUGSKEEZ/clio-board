@@ -1045,13 +1045,21 @@ class ClioBoardApp {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 // Close modals in priority order - close topmost modal first
+                const noteModal = document.getElementById('note-modal');
+                const convertNoteModal = document.getElementById('convert-note-modal');
                 const addTaskModal = document.getElementById('add-task-modal');
                 const editTaskModal = document.getElementById('edit-task-modal');
                 const archiveModal = document.getElementById('archive-modal');
                 const routineModal = document.getElementById('routine-modal');
                 
-                // Check task modals first (they have higher z-index)
-                if (addTaskModal && !addTaskModal.classList.contains('hidden')) {
+                // Check modals in z-index priority order (highest first)
+                // Note: Note modal should close before routine modal since it can be opened from routine modal
+                if (noteModal && !noteModal.classList.contains('hidden')) {
+                    // Note modal is open - close it but DON'T close routine modal
+                    return; // Let the note modal's own handler deal with it
+                } else if (convertNoteModal && !convertNoteModal.classList.contains('hidden')) {
+                    document.getElementById('convert-note-modal').classList.add('hidden');
+                } else if (addTaskModal && !addTaskModal.classList.contains('hidden')) {
                     this.closeAddTaskModal();
                 } else if (editTaskModal && !editTaskModal.classList.contains('hidden')) {
                     this.closeEditTaskModal();
@@ -1117,8 +1125,8 @@ class ClioBoardApp {
             });
         }
 
-        // Column add task buttons - only target buttons, not column containers
-        document.querySelectorAll('button[data-column]').forEach(button => {
+        // Column add task buttons - only target task board plus buttons, not convert modal buttons
+        document.querySelectorAll('.board-column button[data-column]').forEach(button => {
             button.addEventListener('click', (e) => {
                 e.stopPropagation(); // Prevent event bubbling
                 const column = button.dataset.column;
@@ -3927,6 +3935,13 @@ class ClioBoardApp {
             // Refresh routines to update task counts
             await this.loadRoutines();
             this.renderBoard();
+            
+            // If we're in a routine modal context, reload routine tasks too
+            if (this.currentRoutine && taskData.routine_id === this.currentRoutine.id) {
+                const tasks = await this.apiCall(`/api/routines/${this.currentRoutine.id}/tasks`);
+                this.renderRoutineTasks(tasks);
+            }
+            
             this.closeAddTaskModal();
         } catch (error) {
             console.error('Failed to create task:', error);
@@ -4046,7 +4061,7 @@ class ClioBoardApp {
             case 'notes':
                 document.getElementById('notes-view').classList.remove('hidden');
                 this.currentView = 'notes';
-                // TODO: Load notes
+                this.loadNotesView();
                 break;
         }
     }
@@ -4466,12 +4481,13 @@ class ClioBoardApp {
             const tasks = await this.apiCall(`/api/routines/${routine.id}/tasks`);
             this.renderRoutineTasks(tasks);
             
-            // TODO: Load notes for this routine when notes API is ready
-            // const notes = await this.apiCall(`/api/routines/${routine.id}/notes`);
-            // this.renderRoutineNotes(notes);
-            
-            // For now, show placeholder for notes
-            this.renderRoutineNotes([]);
+            // Load ALL notes for this routine (both user and agent notes)
+            const notes = await this.apiCall(`/api/notes?routine_id=${routine.id}`);
+            console.log(`Loaded ${notes.length} notes for routine ${routine.id}:`, notes.map(n => ({id: n.id, title: n.title, routine_id: n.routine_id, type: n.type, column: n.column_position})));
+            // Filter client-side as a safety check
+            const filteredNotes = notes.filter(n => n.routine_id === routine.id);
+            console.log(`After filtering: ${filteredNotes.length} notes actually belong to this routine`);
+            this.renderRoutineNotes(filteredNotes);
             
         } catch (error) {
             console.error('Failed to load routine items:', error);
@@ -4572,11 +4588,13 @@ class ClioBoardApp {
                     }
                 });
                 
-                // Add click handler to task title to open edit modal
-                const taskTitle = div.querySelector('.task-title');
-                taskTitle.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.openEditTaskModal(task);
+                // Add click handler to entire card (except checkbox)
+                div.addEventListener('click', (e) => {
+                    // Don't open modal if clicking checkbox
+                    if (!e.target.closest('.task-checkbox')) {
+                        console.log('Task card clicked:', task.title);
+                        this.openEditTaskModal(task);
+                    }
                 });
                 
                 container.appendChild(div);
@@ -4626,31 +4644,110 @@ class ClioBoardApp {
         
         countElement.textContent = `${notes.length} notes`;
         
+        container.innerHTML = '';
+        
+        // Sort notes by column position and then by position within column
+        const sortedNotes = notes.sort((a, b) => {
+            // First sort by column position
+            if (a.column_position !== b.column_position) {
+                return a.column_position - b.column_position;
+            }
+            // Then by position within column
+            return (a.position || 0) - (b.position || 0);
+        });
+        
+        // Group notes by type and column for visual separation
+        const userTopOfMind = sortedNotes.filter(n => n.type === 'user' && n.column_position === 1);
+        const userBackOfMind = sortedNotes.filter(n => n.type === 'user' && n.column_position === 2);
+        const agentTopOfMind = sortedNotes.filter(n => n.type === 'agent' && n.column_position === 3);
+        const agentBackOfMind = sortedNotes.filter(n => n.type === 'agent' && n.column_position === 4);
+        
         if (notes.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-sm">No notes found for this routine.</p>';
-            return;
+            const noNotesMsg = document.createElement('p');
+            noNotesMsg.className = 'text-gray-500 text-sm mb-3';
+            noNotesMsg.textContent = 'No notes found for this routine.';
+            container.appendChild(noNotesMsg);
+        } else {
+            // Helper function to render note group
+            const renderNoteGroup = (notes, title, colorClass) => {
+                if (notes.length > 0) {
+                    const header = document.createElement('div');
+                    header.className = `text-xs font-semibold ${colorClass} mb-1 mt-2`;
+                    header.textContent = title;
+                    container.appendChild(header);
+                    
+                    notes.forEach(note => {
+                        const div = document.createElement('div');
+                        div.className = 'bg-white rounded-lg px-3 py-1.5 border border-gray-200 hover:shadow-sm hover:border-blue-400 hover:border-2 transition-all cursor-pointer mb-1';
+                        div.setAttribute('data-note-id', note.id);
+                        
+                        // Combine title and content on one line
+                        const displayTitle = note.title || note.content.substring(0, 30);
+                        const displayContent = note.title && note.content ? `: ${note.content}` : '';
+                        const fullText = displayTitle + displayContent;
+                        
+                        div.innerHTML = `
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1 truncate">
+                                    <span class="text-sm cursor-pointer note-title">
+                                        <span class="font-medium">${this.escapeHtml(displayTitle)}</span>
+                                        ${displayContent ? `<span class="text-xs text-gray-600">${this.escapeHtml(displayContent)}</span>` : ''}
+                                    </span>
+                                </div>
+                                ${note.type === 'agent' ? '<i class="fas fa-robot text-xs text-green-500 ml-2 flex-shrink-0"></i>' : ''}
+                            </div>
+                        `;
+                        
+                        // Add click handler to open note for editing
+                        div.addEventListener('click', () => {
+                            this.openNoteModal(note);
+                        });
+                        
+                        container.appendChild(div);
+                    });
+                }
+            };
+            
+            // Render User Notes
+            renderNoteGroup(userTopOfMind, 'User: Top-of-Mind', 'text-blue-600');
+            renderNoteGroup(userBackOfMind, 'User: Back-of-Mind', 'text-gray-600');
+            
+            // Render Agent Notes  
+            renderNoteGroup(agentTopOfMind, 'Agent: Top-of-Mind', 'text-green-600');
+            renderNoteGroup(agentBackOfMind, 'Agent: Back-of-Mind', 'text-green-500');
         }
         
-        container.innerHTML = '';
-        notes.forEach(note => {
-            const div = document.createElement('div');
-            div.className = 'bg-white rounded-lg p-3 border border-gray-200 hover:shadow-sm transition-shadow';
+        // Add 2 mini ghost cards for creating User notes (top-of-mind, back-of-mind)
+        const ghostCardsContainer = document.createElement('div');
+        ghostCardsContainer.className = 'mt-3 flex gap-1';
+        
+        const columns = [
+            { position: 1, label: '+ Top-of-Mind' },
+            { position: 2, label: '+ Back-of-Mind' }
+        ];
+        
+        columns.forEach(column => {
+            const ghostCard = document.createElement('button');
+            ghostCard.className = 'flex-1 bg-transparent border border-dashed border-gray-300 border-opacity-50 rounded px-2 py-1 hover:border-opacity-100 hover:border-blue-400 hover:bg-blue-50 hover:bg-opacity-60 transition-all duration-200 cursor-pointer text-gray-400 hover:text-blue-500 text-xs';
             
-            div.innerHTML = `
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-2">
-                        <span class="text-sm">📝</span>
-                        <span class="text-sm font-medium">${this.escapeHtml(note.title)}</span>
-                    </div>
-                    <div class="text-xs text-gray-500">
-                        <span>Column ${note.column}</span>
-                    </div>
-                </div>
-                ${note.content ? `<p class="text-xs text-gray-600 mt-1 line-clamp-2">${this.escapeHtml(note.content.substring(0, 100))}${note.content.length > 100 ? '...' : ''}</p>` : ''}
-            `;
+            ghostCard.innerHTML = column.label;
             
-            container.appendChild(div);
+            // Add click handler to open note modal with this column and current routine pre-selected
+            ghostCard.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Create a new note object with pre-filled routine
+                const newNote = {
+                    routine_id: this.currentRoutine?.id,
+                    column_position: column.position,
+                    type: 'user'
+                };
+                this.openNoteModal(newNote, column.position);
+            });
+            
+            ghostCardsContainer.appendChild(ghostCard);
         });
+        
+        container.appendChild(ghostCardsContainer);
     }
     
     openEmojiPicker() {
@@ -4956,6 +5053,459 @@ class ClioBoardApp {
         console.error(message);
         // TODO: Implement proper error notification
         alert(message);
+    }
+    
+    // ==================== Notes Management ====================
+    
+    async loadNotesView() {
+        try {
+            // Load all active notes
+            const notes = await this.apiCall('/api/notes');
+            
+            // Load and store routines
+            this.routines = await this.apiCall('/api/routines');
+            
+            // Clear all columns
+            for (let i = 1; i <= 4; i++) {
+                const column = document.getElementById(`notes-col-${i}`);
+                if (column) column.innerHTML = '';
+            }
+            
+            // Render notes in their respective columns
+            notes.forEach(note => {
+                this.renderNoteCard(note);
+            });
+            
+            // Initialize drag and drop for notes
+            this.initializeNotesDragAndDrop();
+            
+            // Set up ghost card click handlers
+            this.setupNoteGhostCards();
+            
+        } catch (error) {
+            console.error('Error loading notes:', error);
+            this.showErrorNotification('Failed to load notes');
+        }
+    }
+    
+    renderNoteCard(note) {
+        const columnId = `notes-col-${note.column_position || 1}`;
+        const column = document.getElementById(columnId);
+        if (!column) return;
+        
+        const noteDiv = document.createElement('div');
+        noteDiv.className = 'note-card';
+        noteDiv.setAttribute('data-note-id', note.id);
+        noteDiv.setAttribute('data-column', note.column_position || 1);
+        
+        // Get routine info if associated
+        let routineTag = '';
+        if (note.routine_id && this.routines) {
+            const routine = this.routines.find(r => r.id === note.routine_id);
+            if (routine) {
+                // Use the routine's color for the tag background
+                const bgColor = this.getRoutineBackgroundColor(routine.color);
+                const textColor = this.getRoutineTextColor(routine.color);
+                routineTag = `<span class="note-card-tag" style="background-color: ${bgColor}; color: ${textColor};">
+                    ${routine.icon || ''} ${routine.title}
+                </span>`;
+            }
+        } else if (note.task_id) {
+            routineTag = `<span class="note-card-tag" style="background-color: #f3f4f6; color: #6b7280;">Task</span>`;
+        }
+        
+        noteDiv.innerHTML = `
+            <span class="note-card-title">${note.title || note.content.substring(0, 50) + '...'}</span>
+            ${routineTag}
+        `;
+        
+        // Click to edit
+        noteDiv.addEventListener('click', () => this.openNoteModal(note));
+        
+        column.appendChild(noteDiv);
+    }
+    
+    setupNoteGhostCards() {
+        document.querySelectorAll('.add-note-ghost').forEach(ghost => {
+            ghost.addEventListener('click', (e) => {
+                const column = e.currentTarget.getAttribute('data-column');
+                this.openNoteModal(null, column);
+            });
+        });
+    }
+    
+    openNoteModal(note = null, defaultColumn = null) {
+        const modal = document.getElementById('note-modal');
+        const title = document.getElementById('note-modal-title');
+        const form = document.getElementById('note-form');
+        
+        // Reset form
+        form.reset();
+        
+        // Always populate the routine dropdown with current routines
+        this.populateNoteRoutineDropdown(this.routines);
+        
+        if (note && note.id) {
+            // Edit mode - existing note with ID
+            title.textContent = 'Edit Note';
+            document.getElementById('note-id').value = note.id;
+            document.getElementById('note-title').value = note.title || '';
+            document.getElementById('note-content').value = note.content || '';
+            document.getElementById('note-column').value = note.column_position || 1;
+            
+            // Set routine dropdown AFTER populating it
+            if (note.routine_id) {
+                document.getElementById('note-routine').value = note.routine_id;
+            }
+            
+            // Show convert to task button
+            document.getElementById('convert-to-task-btn').style.display = 'block';
+        } else {
+            // Create mode - either new note or pre-filled note data from routine modal
+            title.textContent = 'Create Note';
+            document.getElementById('note-id').value = '';
+            document.getElementById('note-column').value = note?.column_position || defaultColumn || 1;
+            
+            // If note object has pre-filled data (from routine modal), apply it
+            if (note && note.routine_id) {
+                document.getElementById('note-routine').value = note.routine_id;
+            }
+            
+            // Hide convert to task button for new notes
+            document.getElementById('convert-to-task-btn').style.display = 'none';
+            
+            // Focus on title field
+            setTimeout(() => {
+                document.getElementById('note-title').focus();
+            }, 100);
+        }
+        
+        modal.classList.remove('hidden');
+        
+        // Set up event handlers if not already set
+        if (!this.noteModalInitialized) {
+            this.initializeNoteModal();
+            this.noteModalInitialized = true;
+        }
+    }
+    
+    initializeNoteModal() {
+        const modal = document.getElementById('note-modal');
+        const form = document.getElementById('note-form');
+        const closeBtn = document.getElementById('close-note-modal');
+        const cancelBtn = document.getElementById('cancel-note-btn');
+        const convertBtn = document.getElementById('convert-to-task-btn');
+        
+        // Close modal handlers
+        const closeModal = () => {
+            modal.classList.add('hidden');
+            form.reset();
+        };
+        
+        closeBtn.addEventListener('click', closeModal);
+        cancelBtn.addEventListener('click', closeModal);
+        
+        // Handle ESC key - use document level for better capture
+        const escHandler = (e) => {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeModal();
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+        
+        // Handle form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.handleNoteSubmit();
+        });
+        
+        // Handle convert to task
+        convertBtn.addEventListener('click', () => {
+            const noteId = document.getElementById('note-id').value;
+            if (noteId) {
+                this.openConvertNoteModal(noteId);
+            }
+        });
+        
+        // Handle keyboard shortcuts
+        const contentField = document.getElementById('note-content');
+        contentField.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            }
+        });
+        
+        // Tab from title to content
+        document.getElementById('note-title').addEventListener('keydown', (e) => {
+            if (e.key === 'Tab' && !e.shiftKey) {
+                e.preventDefault();
+                contentField.focus();
+            }
+        });
+    }
+    
+    async handleNoteSubmit() {
+        const noteId = document.getElementById('note-id').value;
+        const column = document.getElementById('note-column').value;
+        
+        const noteData = {
+            title: document.getElementById('note-title').value,
+            content: document.getElementById('note-content').value,
+            column_position: parseInt(column),
+            routine_id: document.getElementById('note-routine').value || null
+        };
+        
+        try {
+            if (noteId) {
+                // Update existing note
+                await this.apiCall(`/api/notes/${noteId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(noteData)
+                });
+                this.showSuccessNotification('Note updated successfully');
+            } else {
+                // Create new note
+                await this.apiCall('/api/notes', {
+                    method: 'POST',
+                    body: JSON.stringify(noteData)
+                });
+                this.showSuccessNotification('Note created successfully');
+            }
+            
+            // Close modal and reload notes
+            document.getElementById('note-modal').classList.add('hidden');
+            document.getElementById('note-form').reset();
+            await this.loadNotesView();
+            
+            // If we're in a routine modal context, reload routine notes too
+            if (this.currentRoutine) {
+                const notes = await this.apiCall(`/api/notes?routine_id=${this.currentRoutine.id}`);
+                // Filter client-side to ensure only this routine's notes
+                const filteredNotes = notes.filter(n => n.routine_id === this.currentRoutine.id);
+                this.renderRoutineNotes(filteredNotes);
+            }
+            
+        } catch (error) {
+            console.error('Error saving note:', error);
+            this.showErrorNotification('Failed to save note');
+        }
+    }
+    
+    openConvertNoteModal(noteId) {
+        this.convertingNoteId = noteId;
+        const modal = document.getElementById('convert-note-modal');
+        modal.classList.remove('hidden');
+        
+        // Set up event handlers if not already set
+        if (!this.convertModalInitialized) {
+            this.initializeConvertModal();
+            this.convertModalInitialized = true;
+        }
+    }
+    
+    initializeConvertModal() {
+        const modal = document.getElementById('convert-note-modal');
+        const closeBtn = document.getElementById('close-convert-modal');
+        const cancelBtn = document.getElementById('cancel-convert-btn');
+        const columnBtns = document.querySelectorAll('.convert-column-btn');
+        
+        // Close modal handlers
+        const closeModal = () => {
+            modal.classList.add('hidden');
+            this.convertingNoteId = null;
+        };
+        
+        closeBtn.addEventListener('click', closeModal);
+        cancelBtn.addEventListener('click', closeModal);
+        
+        // Handle column selection
+        columnBtns.forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const column = btn.getAttribute('data-column');
+                await this.convertNoteToTask(this.convertingNoteId, column);
+                closeModal();
+            });
+        });
+        
+        // Handle ESC key
+        modal.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+    }
+    
+    async convertNoteToTask(noteId, column) {
+        try {
+            const result = await this.apiCall(`/api/notes/${noteId}/convert`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    column_name: column
+                })
+            });
+            
+            this.showSuccessNotification(`Task "${result.task.title}" created successfully`);
+            
+            // Close note modal and reload notes view
+            document.getElementById('note-modal').classList.add('hidden');
+            document.getElementById('note-form').reset();
+            await this.loadNotesView();
+            
+            // Also reload the task board to show the new task
+            await this.loadTasks();
+            this.renderBoard();
+            
+        } catch (error) {
+            console.error('Error converting note to task:', error);
+            this.showErrorNotification('Failed to convert note to task');
+        }
+    }
+    
+    getRoutineBackgroundColor(color) {
+        // Muted background colors for note tags
+        const colorMap = {
+            blue: '#dbeafe',    // blue-100
+            green: '#d1fae5',   // green-100  
+            purple: '#e9d5ff',  // purple-100
+            orange: '#fed7aa',  // orange-100
+            red: '#fee2e2',     // red-100
+            yellow: '#fef3c7',  // yellow-100
+            pink: '#fce7f3',    // pink-100
+            brown: '#f3e8e1',   // custom brown
+            teal: '#ccfbf1',    // teal-100
+            indigo: '#e0e7ff',  // indigo-100
+            gray: '#f3f4f6'     // gray-100
+        };
+        return colorMap[color] || colorMap.blue;
+    }
+    
+    getRoutineTextColor(color) {
+        // Darker text colors for readability
+        const colorMap = {
+            blue: '#1e40af',    // blue-800
+            green: '#166534',   // green-800
+            purple: '#6b21a8',  // purple-800
+            orange: '#9a3412',  // orange-800
+            red: '#991b1b',     // red-800
+            yellow: '#78350f',  // yellow-800
+            pink: '#9f1239',    // pink-800
+            brown: '#7c2d12',   // custom brown
+            teal: '#115e59',    // teal-800
+            indigo: '#3730a3',  // indigo-800
+            gray: '#374151'     // gray-700
+        };
+        return colorMap[color] || colorMap.blue;
+    }
+    
+    populateNoteRoutineDropdown(routines) {
+        const select = document.getElementById('note-routine');
+        if (!select) return;
+        
+        // Clear existing options except the first one
+        select.innerHTML = '<option value="">No routine</option>';
+        
+        // Add routine options
+        routines.forEach(routine => {
+            if (routine.is_archived) return;
+            const option = document.createElement('option');
+            option.value = routine.id;
+            option.textContent = `${routine.icon || ''} ${routine.title}`;
+            select.appendChild(option);
+        });
+    }
+    
+    async updateNotePositions(columnElement) {
+        // Update the position of all notes in a column
+        const notes = columnElement.querySelectorAll('.note-card');
+        const updates = [];
+        
+        notes.forEach((note, index) => {
+            const noteId = note.getAttribute('data-note-id');
+            if (noteId) {
+                updates.push({
+                    id: noteId,
+                    position: index
+                });
+            }
+        });
+        
+        // Could batch update these on the server if we had an endpoint for it
+        // For now, positions are already updated by the move operation
+        return updates;
+    }
+    
+    async updateAllNotePositionsInColumn(columnElement) {
+        // Update positions for all notes in a column after a reorder
+        const notes = columnElement.querySelectorAll('.note-card');
+        const columnId = parseInt(columnElement.id.replace('notes-col-', ''));
+        
+        for (let i = 0; i < notes.length; i++) {
+            const noteId = notes[i].getAttribute('data-note-id');
+            if (noteId) {
+                try {
+                    await this.apiCall(`/api/notes/${noteId}/move`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ 
+                            column: columnId,
+                            position: i 
+                        })
+                    });
+                } catch (error) {
+                    console.error('Error updating note position:', error);
+                }
+            }
+        }
+    }
+    
+    initializeNotesDragAndDrop() {
+        // Initialize sortable for each notes column
+        for (let i = 1; i <= 4; i++) {
+            const column = document.getElementById(`notes-col-${i}`);
+            if (!column) continue;
+            
+            new Sortable(column, {
+                group: 'notes',
+                animation: 150,
+                ghostClass: 'opacity-50',
+                dragClass: 'dragging',
+                onEnd: async (evt) => {
+                    const noteId = evt.item.getAttribute('data-note-id');
+                    const newColumn = parseInt(evt.to.id.replace('notes-col-', ''));
+                    const newPosition = evt.newIndex;
+                    
+                    // Only update if position actually changed
+                    if (evt.oldIndex !== evt.newIndex || evt.from !== evt.to) {
+                        try {
+                            await this.apiCall(`/api/notes/${noteId}/move`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ 
+                                    column: newColumn,
+                                    position: newPosition 
+                                })
+                            });
+                            
+                            // Update the data attribute
+                            evt.item.setAttribute('data-column', newColumn);
+                            
+                            // Update all other notes' positions in the affected column(s)
+                            await this.updateAllNotePositionsInColumn(evt.to);
+                            if (evt.from !== evt.to) {
+                                await this.updateAllNotePositionsInColumn(evt.from);
+                            }
+                            
+                        } catch (error) {
+                            console.error('Error moving note:', error);
+                            this.showErrorNotification('Failed to move note');
+                            // Revert the move
+                            await this.loadNotesView();
+                        }
+                    }
+                }
+            });
+        }
     }
 }
 
