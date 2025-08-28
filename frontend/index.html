@@ -176,6 +176,33 @@
                 min-width: 280px;
                 flex-shrink: 0;
             }
+            
+            /* Mobile notes layout - horizontal scroll */
+            #notes-board {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                min-width: 100%;
+            }
+            
+            /* User Notes Section - fixed width on mobile */
+            #notes-board > div:first-child {
+                min-width: 100vw;
+                width: 100vw;
+                flex-shrink: 0;
+            }
+            
+            /* Agent Notes Section - fixed width on mobile */
+            #notes-board > div:last-child {
+                min-width: 100vw;
+                width: 100vw;
+                flex-shrink: 0;
+            }
+            
+            /* Individual note columns on mobile */
+            #notes-board .w-1\/2 {
+                min-width: 45vw;
+                width: 45vw;
+            }
         }
 
         /* Drag and drop styles */
@@ -187,6 +214,46 @@
         }
         .sortable-drag {
             opacity: 1;
+        }
+        
+        /* iOS Safari touch behavior fixes */
+        .task-card, .routine-card, .note-card {
+            -webkit-touch-callout: none; /* Disable callout */
+            -webkit-user-select: none; /* Disable text selection */
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
+        }
+        
+        /* Prevent iOS zoom on touch */
+        @media screen and (max-width: 768px) {
+            .task-card, .routine-card, .note-card {
+                touch-action: manipulation; /* Disable double-tap zoom */
+            }
+            
+            /* Mobile header improvements */
+            header .max-w-7xl {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            
+            /* Reduce spacing between elements on mobile */
+            header .flex.items-center.space-x-4 {
+                gap: 0.75rem; /* Reduce from space-x-4 to smaller gap */
+            }
+            
+            /* Make navigation tabs smaller on mobile */
+            .nav-tab {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.875rem;
+            }
+            
+            /* Reduce left margin on navigation tabs */
+            header .ml-8 {
+                margin-left: 1rem;
+            }
         }
         /* Drop zone hover effect */
         #today-tasks.sortable-drag-over,
@@ -203,36 +270,30 @@
     <header class="bg-white shadow-sm border-b border-gray-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center py-2">
-                <div class="flex items-center space-x-4">
-                    <div class="flex items-center space-x-2">
-                        <div class="text-xl">📋️</div>
-                        <h1 class="text-xl font-bold text-gray-900">CLio Board</h1>
-                    </div>
-                    
-                    <!-- Main Navigation Tabs -->
-                    <div class="flex items-center space-x-1 ml-8">
-                        <button id="tasks-tab" class="nav-tab px-3 py-1 text-sm font-medium text-blue-600 bg-blue-50 rounded transition-colors" data-view="tasks">
-                            Tasks
-                        </button>
-                        <button id="routines-tab" class="nav-tab px-3 py-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors" data-view="routines">
-                            Routines
-                        </button>
-                        <button id="notes-tab" class="nav-tab px-3 py-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors" data-view="notes">
-                            Notes
-                        </button>
-                    </div>
+                <!-- Left section: Brand -->
+                <div class="flex items-center space-x-2">
+                    <div class="text-xl">📋️</div>
+                    <h1 class="text-xl font-bold text-gray-900">CLio</h1>
                 </div>
                 
+                <!-- Center section: Main Navigation Tabs -->
+                <div class="flex items-center space-x-1">
+                    <button id="tasks-tab" class="nav-tab px-3 py-1 text-sm font-medium text-blue-600 bg-blue-50 rounded transition-colors" data-view="tasks">
+                        Tasks
+                    </button>
+                    <button id="routines-tab" class="nav-tab px-3 py-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors" data-view="routines">
+                        Routines
+                    </button>
+                    <button id="notes-tab" class="nav-tab px-3 py-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors" data-view="notes">
+                        Notes
+                    </button>
+                </div>
+                
+                <!-- Right section: Archive -->
                 <div class="flex items-center space-x-4">
-                    <!-- Archive Tab (separate from main nav) -->
                     <button id="archive-tab-btn" class="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center space-x-1">
                         <i class="fas fa-archive text-xs"></i>
                         <span>Archive</span>
-                    </button>
-                    
-                    <!-- Settings Menu -->
-                    <button class="p-1 text-gray-400 hover:text-gray-600 transition-colors">
-                        <i class="fas fa-cog text-sm"></i>
                     </button>
                 </div>
             </div>

@@ -4103,6 +4103,9 @@ class ClioBoardApp {
             const container = document.getElementById(`${this.getColumnId(column)}-tasks`);
             if (!container) return;
             
+            // Detect mobile devices for touch delay
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+            
             const sortable = Sortable.create(container, {
                 group: 'tasks',
                 animation: 150,
@@ -4110,6 +4113,8 @@ class ClioBoardApp {
                 chosenClass: 'sortable-chosen',
                 dragClass: 'sortable-drag',
                 filter: '.add-task-ghost-card',  // Can't drag the ghost card
+                delay: isMobile ? 300 : 0,  // 300ms delay on mobile, instant on desktop
+                delayOnTouchOnly: true,  // Only apply delay to touch events
                 onChange: (evt) => {
                     // Keep ghost card at the bottom during drag
                     const ghostCard = evt.to.querySelector('.add-task-ghost-card');
@@ -4272,11 +4277,16 @@ class ClioBoardApp {
             this.routineSortable.destroy();
         }
         
+        // Detect mobile devices for touch delay
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+        
         this.routineSortable = Sortable.create(sortableContainer, {
             animation: 150,
             ghostClass: 'sortable-ghost',
             chosenClass: 'sortable-chosen',
             dragClass: 'sortable-drag',
+            delay: isMobile ? 300 : 0,  // 300ms delay on mobile, instant on desktop
+            delayOnTouchOnly: true,  // Only apply delay to touch events
             onEnd: (evt) => this.handleRoutineReorder(evt)
         });
     }
