@@ -1,6 +1,6 @@
 {
   "name": "CLIO Board - Task Management",
-  "short_name": "CLIO Board",
+  "short_name": "CLio",
   "description": "Personal task management board with AI agent integration",
   "start_url": "/",
   "display": "standalone",

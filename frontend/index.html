@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CLIO Board - Task Management</title>
+    <title>CLio</title>
     <!-- Debug version 5 -->
     
     <!-- Favicons -->
@@ -18,11 +18,25 @@
     <meta name="theme-color" content="#0052CC">
     <link rel="manifest" href="manifest.json">
     
+    <!-- Figtree Font -->
+    <link rel="stylesheet" href="fonts/figtree-fonts.css">
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Figtree', 'system-ui', '-apple-system', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
     
-    <!-- Font Awesome for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Font Awesome 7.0 for icons (self-hosted, minimal) -->
+    <link rel="stylesheet" href="fonts/fontawesome-minimal/css/all-fixed.min.css">
     
     <!-- SortableJS for drag-and-drop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -32,6 +46,39 @@
     
     <!-- Custom styles -->
     <style>
+        /* Force Figtree font everywhere with thin weight and condensed spacing */
+        * {
+            font-family: 'Figtree', system-ui, -apple-system, sans-serif !important;
+            font-weight: 300 !important;  /* Thin weight globally */
+            letter-spacing: -0.01em;  /* Slightly condensed */
+        }
+        
+        /* Allow Font Awesome icons to use their font family */
+        .fa, .fas, .far, .fab, .fal, .fad {
+            font-family: "Font Awesome 7 Free", "Font Awesome 7 Brands" !important;
+            font-weight: 900 !important;  /* Font Awesome needs specific weights */
+        }
+        
+        /* SemiBold header navigation tabs */
+        .nav-tab {
+            font-weight: 600 !important;  /* SemiBold */
+        }
+        
+        /* Medium weight column headings on Task board */
+        .column-header h3, h3.text-sm.font-semibold {
+            font-weight: 500 !important;  /* Medium */
+        }
+        
+        /* Regular weight for Routine card titles */
+        .routine-card h3, .routine-card-title {
+            font-weight: 400 !important;  /* Regular */
+        }
+        
+        /* Regular weight for Notes section titles (Top/Back of Mind) */
+        #notes-board h2, .text-lg.font-semibold {
+            font-weight: 400 !important;  /* Regular */
+        }
+        
         /* Custom scrollbar for webkit browsers */
         ::-webkit-scrollbar {
             width: 8px;
@@ -47,6 +94,17 @@
         }
         ::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
+        }
+
+        /* Enable pull-to-refresh on iOS PWAs */
+        html, body {
+            overscroll-behavior-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        /* Prevent elastic bouncing on main container */
+        main {
+            overscroll-behavior-y: contain;
         }
 
         /* Smooth animations */
@@ -281,28 +339,28 @@
     <!-- Header with Tab Navigation -->
     <header class="bg-white shadow-sm border-b border-gray-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-2">
+            <div class="flex items-center py-2 relative">
                 <!-- Left section: Brand -->
                 <div class="flex items-center space-x-2">
                     <img src="icons/fun2/trello.svg" alt="CLIO Board" class="w-11 h-11 -my-1">
-                    <h1 class="text-xl font-bold text-gray-900">CLio</h1>
+                    <h1 class="text-3xl font-bold text-gray-900 hidden sm:block">CLio</h1>
                 </div>
                 
-                <!-- Center section: Main Navigation Tabs -->
-                <div class="flex items-center space-x-1">
-                    <button id="tasks-tab" class="nav-tab px-3 py-1 text-sm font-medium text-blue-600 bg-blue-50 rounded transition-colors" data-view="tasks">
+                <!-- Center section: Main Navigation Tabs (Absolutely Centered) -->
+                <div class="flex items-center space-x-0 absolute left-1/2 transform -translate-x-1/2">
+                    <button id="tasks-tab" class="nav-tab px-4 py-2 text-base font-medium text-blue-600 bg-blue-50 rounded transition-colors" data-view="tasks">
                         Tasks
                     </button>
-                    <button id="routines-tab" class="nav-tab px-3 py-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors" data-view="routines">
+                    <button id="routines-tab" class="nav-tab px-4 py-2 text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors" data-view="routines">
                         Routines
                     </button>
-                    <button id="notes-tab" class="nav-tab px-3 py-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors" data-view="notes">
+                    <button id="notes-tab" class="nav-tab px-4 py-2 text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors" data-view="notes">
                         Notes
                     </button>
                 </div>
                 
-                <!-- Right section: Archive -->
-                <div class="flex items-center space-x-4">
+                <!-- Right section: Archive (Aligned to Right) -->
+                <div class="flex items-center space-x-4 ml-auto">
                     <button id="archive-tab-btn" class="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center space-x-1">
                         <i class="fas fa-archive text-xs"></i>
                         <span>Archive</span>
@@ -418,7 +476,7 @@
                 <div id="notes-board" class="flex gap-6">
                     <!-- User Notes Section (Left Half) -->
                     <div class="w-1/2 min-w-0">
-                        <h2 class="text-xl font-bold text-white mb-4">User Notes</h2>
+                        <h2 class="text-md font-bold text-white mb-2 text-center">User Notes</h2>
                         <div class="flex gap-3">
                             <!-- Column 1: Top-of-Mind -->
                             <div class="w-1/2 min-w-0 bg-white rounded-lg shadow-sm">
@@ -455,7 +513,7 @@
                     
                     <!-- Agent Notes Section (Right Half) -->
                     <div class="w-1/2 min-w-0">
-                        <h2 class="text-xl font-bold text-white mb-4">Agent Notes</h2>
+                        <h2 class="text-md font-bold text-white mb-2 text-center">Agent Notes</h2>
                         <div class="flex gap-3">
                             <!-- Column 3: Top-of-Mind -->
                             <div class="w-1/2 min-w-0 bg-white rounded-lg shadow-sm">
@@ -1023,6 +1081,102 @@
             </div>
         </div>
     </div>
+
+    <!-- Pull-to-refresh for iOS PWA only -->
+    <script>
+        // Only enable pull-to-refresh on iOS devices in standalone PWA mode
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isPWA = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+        
+        if (isIOS && isPWA) {
+            let startY = 0;
+            let pullDistance = 0;
+            let isPulling = false;
+            let pullThreshold = 60; // pixels to trigger refresh
+
+            // Create pull-to-refresh indicator
+            const pullIndicator = document.createElement('div');
+            pullIndicator.id = 'pull-indicator';
+            pullIndicator.style.cssText = `
+                position: fixed;
+                top: -50px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 82, 204, 0.9);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 0 0 10px 10px;
+                font-size: 14px;
+                font-weight: 600;
+                transition: top 0.3s ease;
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            `;
+            pullIndicator.innerHTML = '<i class="fas fa-arrow-down"></i> Pull to refresh';
+            document.body.appendChild(pullIndicator);
+
+            // Touch event handlers
+            document.addEventListener('touchstart', (e) => {
+                if (window.scrollY === 0) {
+                    startY = e.touches[0].clientY;
+                    isPulling = true;
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!isPulling || window.scrollY > 0) return;
+                
+                pullDistance = e.touches[0].clientY - startY;
+                
+                if (pullDistance > 0) {
+                    // Prevent default scrolling behavior
+                    e.preventDefault();
+                    
+                    // Update indicator position
+                    const indicatorTop = Math.min(pullDistance - 50, 0);
+                    pullIndicator.style.top = indicatorTop + 'px';
+                    
+                    // Change indicator text when threshold is reached
+                    if (pullDistance > pullThreshold) {
+                        pullIndicator.innerHTML = '<i class="fas fa-arrow-up"></i> Release to refresh';
+                        pullIndicator.style.background = 'rgba(34, 197, 94, 0.9)';
+                    } else {
+                        pullIndicator.innerHTML = '<i class="fas fa-arrow-down"></i> Pull to refresh';
+                        pullIndicator.style.background = 'rgba(0, 82, 204, 0.9)';
+                    }
+                }
+            }, { passive: false });
+
+            document.addEventListener('touchend', (e) => {
+                if (isPulling && pullDistance > pullThreshold) {
+                    // Trigger refresh
+                    pullIndicator.innerHTML = '<i class="fas fa-sync fa-spin"></i> Refreshing...';
+                    pullIndicator.style.top = '0px';
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                } else {
+                    // Reset indicator
+                    pullIndicator.style.top = '-50px';
+                }
+                
+                isPulling = false;
+                pullDistance = 0;
+            }, { passive: true });
+
+            // Reset indicator on scroll
+            document.addEventListener('scroll', () => {
+                if (window.scrollY > 0 && isPulling) {
+                    pullIndicator.style.top = '-50px';
+                    isPulling = false;
+                    pullDistance = 0;
+                }
+            }, { passive: true });
+        }
+    </script>
 
     <!-- JavaScript with cache busting -->
     <script src="app.js?v=132"></script>
