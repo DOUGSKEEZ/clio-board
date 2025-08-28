@@ -2424,6 +2424,12 @@ class ClioBoardApp {
             await this.loadTasks();
             this.renderBoard();
             
+            // If we're in a routine modal context, reload routine tasks too
+            if (this.currentRoutine) {
+                const tasks = await this.apiCall(`/api/routines/${this.currentRoutine.id}/tasks`);
+                this.renderRoutineTasks(tasks);
+            }
+            
             console.log('✅ Task archived from modal');
         } catch (error) {
             console.error('Error archiving task from modal:', error);
@@ -3149,6 +3155,52 @@ class ClioBoardApp {
         }
     }
 
+    async handleNoteRestore(noteId) {
+        try {
+            console.log(`📤 Restoring note ${noteId}`);
+            
+            await this.apiCall(`/api/notes/${noteId}/restore`, {
+                method: 'PUT'
+            });
+            
+            // Refresh archive view
+            await this.loadArchivedNotes();
+            this.renderArchivedNotes();
+            this.updateArchiveCounts();
+            
+            // Refresh notes view to show the restored note
+            await this.loadNotesView();
+        } catch (error) {
+            console.error('Failed to restore note:', error);
+            this.showError('Failed to restore note');
+        }
+    }
+
+    async handleNoteArchive(noteId) {
+        try {
+            console.log(`📦 Archiving note ${noteId}`);
+            
+            await this.apiCall(`/api/notes/${noteId}/archive`, {
+                method: 'PUT'
+            });
+            
+            // Refresh notes view to remove archived note
+            await this.loadNotesView();
+            
+            // If we're in a routine modal context, reload routine notes too
+            if (this.currentRoutine) {
+                const notes = await this.apiCall(`/api/notes?routine_id=${this.currentRoutine.id}`);
+                const filteredNotes = notes.filter(n => n.routine_id === this.currentRoutine.id);
+                this.renderRoutineNotes(filteredNotes);
+            }
+            
+            this.showSuccessNotification('Note archived successfully');
+        } catch (error) {
+            console.error('Failed to archive note:', error);
+            this.showErrorNotification('Failed to archive note');
+        }
+    }
+
     async handleRoutineRestore(routineId) {
         try {
             console.log(`📤 Restoring routine ${routineId}`);
@@ -3162,7 +3214,8 @@ class ClioBoardApp {
             // Refresh archive view
             await Promise.all([
                 this.loadArchivedTasks(),
-                this.loadArchivedRoutines()
+                this.loadArchivedRoutines(),
+                this.loadArchivedNotes()
             ]);
             this.renderArchivedItems();
             this.updateArchiveCounts();
@@ -3194,6 +3247,12 @@ class ClioBoardApp {
         this.archivedRoutines = await this.apiCall('/api/routines/archived');
         console.log('📋 loadArchivedRoutines() complete, received', this.archivedRoutines.length, 'archived routines');
         console.log('📋 Archived routines data:', this.archivedRoutines);
+    }
+    
+    async loadArchivedNotes() {
+        console.log('📡 loadArchivedNotes() called, making API call...');
+        this.archivedNotes = await this.apiCall('/api/notes/archived');
+        console.log('📋 loadArchivedNotes() complete, received', this.archivedNotes.length, 'archived notes');
     }
 
     // Modal Management
@@ -3468,10 +3527,11 @@ class ClioBoardApp {
         const modal = document.getElementById('archive-modal');
         modal.classList.remove('hidden');
         
-        // Load both archived tasks and routines
+        // Load archived tasks, routines, and notes
         await Promise.all([
             this.loadArchivedTasks(),
-            this.loadArchivedRoutines()
+            this.loadArchivedRoutines(),
+            this.loadArchivedNotes()
         ]);
         
         // Initialize tabs and render content
@@ -3535,14 +3595,17 @@ class ClioBoardApp {
         const tasksCount = this.archivedTasks ? this.archivedTasks.length : 0;
         const routinesCount = this.archivedRoutines ? this.archivedRoutines.length : 0;
         
+        const notesCount = this.archivedNotes ? this.archivedNotes.length : 0;
+        
         document.getElementById('archive-tasks-count').textContent = tasksCount;
         document.getElementById('archive-routines-count').textContent = routinesCount;
-        document.getElementById('archive-notes-count').textContent = 0; // TODO: Update when notes are implemented
+        document.getElementById('archive-notes-count').textContent = notesCount;
     }
 
     renderArchivedItems() {
         this.renderArchivedRoutines();
         this.renderArchivedTasks();
+        this.renderArchivedNotes();
     }
 
     renderArchivedRoutines() {
@@ -3682,6 +3745,85 @@ class ClioBoardApp {
         if (restoreBtn) {
             restoreBtn.addEventListener('click', () => {
                 this.handleTaskRestore(task.id);
+            });
+        }
+        
+        return div;
+    }
+
+    renderArchivedNotes() {
+        const container = document.getElementById('archived-notes-container');
+        
+        if (!this.archivedNotes || this.archivedNotes.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-8">No archived notes</p>';
+            return;
+        }
+
+        container.innerHTML = '';
+        
+        // Sort by archived_at timestamp, most recent first
+        const sortedNotes = [...this.archivedNotes].sort((a, b) => {
+            const dateA = new Date(a.archived_at);
+            const dateB = new Date(b.archived_at);
+            return dateB - dateA; // Descending order (most recent first)
+        });
+        
+        sortedNotes.forEach(note => {
+            const noteElement = this.createArchivedNoteCard(note);
+            container.appendChild(noteElement);
+        });
+    }
+
+    createArchivedNoteCard(note) {
+        const div = document.createElement('div');
+        div.className = 'bg-gray-50 rounded-lg p-3 border border-gray-200';
+        
+        const routineInfo = note.routine_id ? 
+            this.routines.find(r => r.id === note.routine_id) : null;
+            
+        const archivedDateTime = new Date(note.archived_at).toLocaleString('en-US', { 
+            month: 'short', 
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        });
+        
+        const columnNames = {
+            1: 'Top-of-Mind',
+            2: 'Back-of-Mind', 
+            3: 'Agent: Top-of-Mind',
+            4: 'Agent: Back-of-Mind'
+        };
+        const columnName = columnNames[note.column_position] || `Column ${note.column_position}`;
+        
+        div.innerHTML = `
+            <div class="flex items-start justify-between mb-2">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <i class="fas fa-sticky-note text-yellow-500"></i>
+                        <h3 class="text-sm font-medium text-gray-900">${this.escapeHtml(note.title || note.content.substring(0, 50))}</h3>
+                        <span class="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded">${columnName}</span>
+                        ${note.type === 'agent' ? '<i class="fas fa-robot text-xs text-green-500"></i>' : ''}
+                    </div>
+                    ${note.content && note.title ? `<p class="text-xs text-gray-600 mb-2">${this.escapeHtml(note.content.substring(0, 100))}${note.content.length > 100 ? '...' : ''}</p>` : ''}
+                    <div class="flex items-center space-x-2 text-xs text-gray-500">
+                        <span>Archived ${archivedDateTime}</span>
+                        ${routineInfo ? `<span>•</span><span>${this.escapeHtml(routineInfo.title || routineInfo.name)}</span>` : ''}
+                    </div>
+                </div>
+                <button class="restore-note-btn text-blue-600 hover:text-blue-800 transition-colors" data-note-id="${note.id}" title="Restore note">
+                    <i class="fas fa-undo text-sm"></i>
+                </button>
+            </div>
+        `;
+        
+        // Add restore button handler
+        const restoreBtn = div.querySelector('.restore-note-btn');
+        if (restoreBtn) {
+            restoreBtn.addEventListener('click', () => {
+                this.handleNoteRestore(note.id);
             });
         }
         
@@ -5082,6 +5224,12 @@ class ClioBoardApp {
             // Set up ghost card click handlers
             this.setupNoteGhostCards();
             
+            // Set up event delegation for note menus (only once)
+            if (!this.notesEventDelegationSetup) {
+                this.setupNotesEventDelegation();
+                this.notesEventDelegationSetup = true;
+            }
+            
         } catch (error) {
             console.error('Error loading notes:', error);
             this.showErrorNotification('Failed to load notes');
@@ -5094,7 +5242,7 @@ class ClioBoardApp {
         if (!column) return;
         
         const noteDiv = document.createElement('div');
-        noteDiv.className = 'note-card';
+        noteDiv.className = 'note-card group';
         noteDiv.setAttribute('data-note-id', note.id);
         noteDiv.setAttribute('data-column', note.column_position || 1);
         
@@ -5115,12 +5263,35 @@ class ClioBoardApp {
         }
         
         noteDiv.innerHTML = `
-            <span class="note-card-title">${note.title || note.content.substring(0, 50) + '...'}</span>
-            ${routineTag}
+            <div class="flex items-center w-full relative">
+                <div class="flex-1 min-w-0 ${routineTag ? 'mr-1' : 'group-hover:mr-7'}">
+                    <span class="note-card-title truncate block ${routineTag ? 'group-hover:pr-5 transition-all duration-150' : ''}">${note.title || note.content.substring(0, 50) + '...'}</span>
+                </div>
+                ${routineTag ? `
+                    <div class="flex-shrink-0 routine-tag-container transition-transform duration-150 ease-out group-hover:translate-x-[-20px] relative">
+                        ${routineTag}
+                    </div>
+                ` : ''}
+                <div class="flex-shrink-0 menu-container opacity-0 group-hover:opacity-100 transition-opacity duration-150 ${routineTag ? 'absolute right-0' : ''}">
+                    <button class="note-menu-btn text-gray-400 hover:text-gray-600 transition-all p-1 -m-1 rounded" data-note-id="${note.id}">
+                        <i class="fas fa-ellipsis-h text-sm"></i>
+                    </button>
+                    <div class="note-menu absolute right-0 top-6 bg-white border border-gray-200 rounded-md shadow-lg min-w-[80px] hidden" style="z-index: 99999; position: absolute;">
+                        <button class="archive-note-btn w-full text-left px-3 py-2 pr-4 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2" data-note-id="${note.id}">
+                            <i class="fas fa-archive text-xs"></i>
+                            <span>Archive</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         `;
         
-        // Click to edit
-        noteDiv.addEventListener('click', () => this.openNoteModal(note));
+        // Click to edit (except on menu buttons)
+        noteDiv.addEventListener('click', (e) => {
+            if (!e.target.closest('.note-menu-btn, .archive-note-btn')) {
+                this.openNoteModal(note);
+            }
+        });
         
         column.appendChild(noteDiv);
     }
@@ -5132,6 +5303,129 @@ class ClioBoardApp {
                 this.openNoteModal(null, column);
             });
         });
+    }
+    
+    setupNotesEventDelegation() {
+        console.log('🎯 Setting up notes event delegation...');
+        
+        // Use the notes board container for event delegation
+        const notesBoard = document.getElementById('notes-board');
+        if (!notesBoard) {
+            console.error('❌ Notes board not found for event delegation');
+            return;
+        }
+        
+        notesBoard.addEventListener('click', (e) => {
+            console.log('🖱️ Click detected on:', e.target.className || e.target.tagName);
+            
+            // Three-dot menu button
+            if (e.target.matches('.note-menu-btn') || e.target.closest('.note-menu-btn')) {
+                console.log('🎯 Menu button detected!');
+                const menuBtn = e.target.closest('.note-menu-btn');
+                const noteCard = menuBtn.closest('.note-card');
+                const menu = noteCard.querySelector('.note-menu');
+                
+                e.stopPropagation();
+                
+                // Close all other note menus first
+                document.querySelectorAll('.note-menu').forEach(m => {
+                    if (m !== menu) m.classList.add('hidden');
+                });
+                
+                // Toggle this menu
+                if (menu) {
+                    if (menu.classList.contains('hidden')) {
+                        // Position the menu and append to body to escape stacking context
+                        const buttonRect = menuBtn.getBoundingClientRect();
+                        menu.style.position = 'fixed';
+                        menu.style.left = `${buttonRect.left}px`;
+                        menu.style.top = `${buttonRect.bottom + 4}px`;
+                        menu.style.zIndex = '99999';
+                        menu.style.width = '90px'; // Fixed width with padding
+                        menu.style.minWidth = '90px';
+                        document.body.appendChild(menu);
+                        menu.classList.remove('hidden');
+                        console.log('🟢 Menu opened, parent:', menu.parentNode.nodeName);
+                    } else {
+                        menu.classList.add('hidden');
+                        // Always move back to original container when hiding
+                        const noteId = menu.querySelector('.archive-note-btn')?.dataset.noteId;
+                        if (noteId) {
+                            const noteCard = document.querySelector(`[data-note-id="${noteId}"]`);
+                            const menuContainer = noteCard?.querySelector('.menu-container');
+                            if (menuContainer && menu.parentNode !== menuContainer) {
+                                menuContainer.appendChild(menu);
+                                console.log('🔄 Menu moved back to container');
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+            
+            // Archive button
+            if (e.target.matches('.archive-note-btn') || e.target.closest('.archive-note-btn')) {
+                console.log('🗂️ Archive button clicked!');
+                const archiveBtn = e.target.closest('.archive-note-btn');
+                const noteId = archiveBtn.dataset.noteId;
+                console.log('🗂️ Archiving note ID:', noteId);
+                
+                e.stopPropagation();
+                
+                this.handleNoteArchive(noteId);
+                
+                // Close menu - find it by note ID since menu might be in body
+                const menu = document.querySelector(`[data-note-id="${noteId}"]`)?.querySelector('.note-menu') || 
+                           document.querySelector(`.note-menu .archive-note-btn[data-note-id="${noteId}"]`)?.closest('.note-menu');
+                if (menu) menu.classList.add('hidden');
+                return;
+            }
+        });
+        
+        // Close menus when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.note-menu, .note-menu-btn')) {
+                document.querySelectorAll('.note-menu').forEach(menu => {
+                    if (!menu.classList.contains('hidden')) {
+                        menu.classList.add('hidden');
+                        // Move menu back to its original container if it was moved to body
+                        if (menu.parentNode === document.body) {
+                            // Find the original container and move it back
+                            const noteId = menu.querySelector('.archive-note-btn')?.dataset.noteId;
+                            if (noteId) {
+                                const noteCard = document.querySelector(`[data-note-id="${noteId}"]`);
+                                const menuContainer = noteCard?.querySelector('.menu-container');
+                                if (menuContainer) {
+                                    menuContainer.appendChild(menu);
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Also listen on document.body for menus that get moved there
+        document.body.addEventListener('click', (e) => {
+            // Archive button (when menu is in body)
+            if (e.target.matches('.archive-note-btn') || e.target.closest('.archive-note-btn')) {
+                console.log('🗂️ Archive button clicked in body!');
+                const archiveBtn = e.target.closest('.archive-note-btn');
+                const noteId = archiveBtn.dataset.noteId;
+                console.log('🗂️ Archiving note ID:', noteId);
+                
+                e.stopPropagation();
+                
+                this.handleNoteArchive(noteId);
+                
+                // Close menu
+                const menu = archiveBtn.closest('.note-menu');
+                if (menu) menu.classList.add('hidden');
+                return;
+            }
+        });
+        
+        console.log('✅ Notes event delegation setup complete');
     }
     
     openNoteModal(note = null, defaultColumn = null) {
@@ -5158,8 +5452,9 @@ class ClioBoardApp {
                 document.getElementById('note-routine').value = note.routine_id;
             }
             
-            // Show convert to task button
+            // Show convert to task button and archive menu for existing notes
             document.getElementById('convert-to-task-btn').style.display = 'block';
+            document.getElementById('edit-note-menu-btn').classList.remove('hidden');
         } else {
             // Create mode - either new note or pre-filled note data from routine modal
             title.textContent = 'Create Note';
@@ -5171,8 +5466,9 @@ class ClioBoardApp {
                 document.getElementById('note-routine').value = note.routine_id;
             }
             
-            // Hide convert to task button for new notes
+            // Hide convert to task button and archive menu for new notes
             document.getElementById('convert-to-task-btn').style.display = 'none';
+            document.getElementById('edit-note-menu-btn').classList.add('hidden');
             
             // Focus on title field
             setTimeout(() => {
@@ -5204,6 +5500,32 @@ class ClioBoardApp {
         
         closeBtn.addEventListener('click', closeModal);
         cancelBtn.addEventListener('click', closeModal);
+        
+        // Handle three-dot menu for notes
+        const noteMenuBtn = document.getElementById('edit-note-menu-btn');
+        const noteMenu = document.getElementById('edit-note-menu');
+        const archiveNoteBtn = document.getElementById('archive-note-from-modal-btn');
+        
+        if (noteMenuBtn && noteMenu) {
+            noteMenuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                noteMenu.classList.toggle('hidden');
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!noteMenuBtn.contains(e.target) && !noteMenu.contains(e.target)) {
+                    noteMenu.classList.add('hidden');
+                }
+            });
+        }
+        
+        if (archiveNoteBtn) {
+            archiveNoteBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await this.archiveNoteFromModal();
+            });
+        }
         
         // Handle ESC key - use document level for better capture
         const escHandler = (e) => {
@@ -5291,6 +5613,37 @@ class ClioBoardApp {
         } catch (error) {
             console.error('Error saving note:', error);
             this.showErrorNotification('Failed to save note');
+        }
+    }
+    
+    async archiveNoteFromModal() {
+        const noteId = document.getElementById('note-id').value;
+        if (!noteId) return;
+        
+        try {
+            await this.apiCall(`/api/notes/${noteId}/archive`, {
+                method: 'PUT'
+            });
+            
+            // Close the modal
+            document.getElementById('note-modal').classList.add('hidden');
+            document.getElementById('note-form').reset();
+            
+            // Refresh notes view
+            await this.loadNotesView();
+            
+            // If we're in a routine modal context, reload routine notes too
+            if (this.currentRoutine) {
+                const notes = await this.apiCall(`/api/notes?routine_id=${this.currentRoutine.id}`);
+                const filteredNotes = notes.filter(n => n.routine_id === this.currentRoutine.id);
+                this.renderRoutineNotes(filteredNotes);
+            }
+            
+            this.showSuccessNotification('Note archived successfully');
+            console.log('✅ Note archived from modal');
+        } catch (error) {
+            console.error('Error archiving note from modal:', error);
+            this.showErrorNotification('Failed to archive note');
         }
     }
     
