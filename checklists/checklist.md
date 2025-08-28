@@ -195,8 +195,8 @@
 - [x] **Eliminated blinking** - Fixed task title flicker on list item changes
 
 ### 📋 REMAINING POLISH FEATURES
-- [ ] **Font & spacing optimization** - Typography improvements and space utilization
-- [ ] **Self-host assets** - Local Tailwind CSS, Font Awesome, SortableJS with custom colors
+- [x] **Font & spacing optimization** - Typography improvements and space utilization
+- [x] **Self-host assets** - Local Tailwind CSS, Font Awesome, SortableJS with custom colors
 - [x] **Iconography** - Added icons / favicons
 - [x] **Mobile responsive design** - Tablet/phone optimized layouts ✅ COMPLETED
 - [x] **Agent rate limiting** - Express middleware (~10 lines) ✅ COMPLETED

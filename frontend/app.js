@@ -389,7 +389,7 @@ class ClioBoardApp {
             this.routines.find(r => r.id === task.routine_id) : null;
         const isPaused = routineInfo && routineInfo.status === 'paused';
         
-        div.className = `task-card ${isPaused ? 'bg-gray-200 opacity-90' : 'bg-white'} rounded-lg p-1.5 shadow-sm card-transition cursor-pointer border border-gray-200 hover:border-blue-400 hover:border-2 hover:shadow-md group`;
+        div.className = `task-card ${isPaused ? 'bg-gray-200 opacity-90' : 'bg-white'} rounded-lg py-1 pl-1.5 pr-1 shadow-sm card-transition cursor-pointer border border-gray-200 hover:border-blue-400 hover:border-2 hover:shadow-md group`;
         div.setAttribute('data-task-id', task.id);
         div.setAttribute('data-task-type', task.type);
         
@@ -4666,7 +4666,7 @@ class ClioBoardApp {
         } else {
             activeTasks.forEach(task => {
                 const div = document.createElement('div');
-                div.className = 'bg-white rounded-lg p-3 border border-gray-200 hover:shadow-sm hover:border-blue-400 hover:border-2 transition-all cursor-pointer';
+                div.className = 'bg-white rounded-lg p-2 border border-gray-200 hover:shadow-sm hover:border-blue-400 hover:border-2 transition-all cursor-pointer';
                 div.setAttribute('data-task-id', task.id);
                 
                 const dueDate = task.due_date ? 
