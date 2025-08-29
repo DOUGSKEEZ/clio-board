@@ -3,6 +3,7 @@ const router = express.Router();
 const routineService = require('../services/routineService');
 const { createAuditMiddleware } = require('../middleware/auditLog');
 const { logger } = require('../middleware/logger');
+const validation = require('../middleware/validation');
 
 /**
  * @swagger
@@ -181,6 +182,7 @@ router.get('/:id/tasks', async (req, res, next) => {
  *         description: Invalid input
  */
 router.post('/',
+  validation.validateRoutine,
   createAuditMiddleware('create_routine', 'routine'),
   async (req, res, next) => {
     try {
@@ -299,6 +301,7 @@ router.put('/reorder',
 );
 
 router.put('/:id',
+  validation.validateRoutine,
   createAuditMiddleware('update_routine', 'routine'),
   async (req, res, next) => {
     try {

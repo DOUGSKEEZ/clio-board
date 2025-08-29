@@ -238,22 +238,25 @@ class ClioBoardApp {
             }
         }
         
-        // All retries failed, emit final error event
-        window.dispatchEvent(new CustomEvent('networkError', { 
-            detail: { 
-                url: `${this.apiUrl}${endpoint}`, 
-                method: options.method || 'GET',
-                error: {
-                    code: lastError.code,
-                    message: lastError.message,
-                    userMessage: lastError.userMessage,
-                    retryable: lastError.retryable,
-                    status: lastError.status,
-                    totalAttempts: maxRetries + 1,
-                    finalAttempt: true
+        // Only emit network error events for actual network/server errors
+        // Don't show the red popup for validation errors (400) - those are user input errors
+        if (lastError.status !== 400) {
+            window.dispatchEvent(new CustomEvent('networkError', { 
+                detail: { 
+                    url: `${this.apiUrl}${endpoint}`, 
+                    method: options.method || 'GET',
+                    error: {
+                        code: lastError.code,
+                        message: lastError.message,
+                        userMessage: lastError.userMessage,
+                        retryable: lastError.retryable,
+                        status: lastError.status,
+                        totalAttempts: maxRetries + 1,
+                        finalAttempt: true
+                    }
                 }
-            }
-        }));
+            }));
+        }
         
         throw lastError;
     }
@@ -277,7 +280,9 @@ class ClioBoardApp {
     // Helper method to get user-friendly error messages
     getUserFriendlyMessage(status, errorData) {
         switch (status) {
-            case 400: return 'Invalid request. Please check your input.';
+            case 400: 
+                // For validation errors, show the specific error message
+                return errorData.error || errorData.message || 'Invalid request. Please check your input.';
             case 401: return 'You are not authorized to perform this action.';
             case 403: return 'Access denied. You don\'t have permission.';
             case 404: return 'The requested item was not found.';
@@ -4030,7 +4035,9 @@ class ClioBoardApp {
         } catch (error) {
             console.error('Failed to update task:', error);
             console.error('Error stack:', error.stack);
-            this.showError('Failed to update task');
+            // Show specific validation error if available
+            const errorMessage = error.userMessage || 'Failed to update task';
+            this.showError(errorMessage);
         } finally {
             this.hideLoading();
         }
@@ -4087,7 +4094,9 @@ class ClioBoardApp {
             this.closeAddTaskModal();
         } catch (error) {
             console.error('Failed to create task:', error);
-            this.showError('Failed to create task');
+            // Show specific validation error if available
+            const errorMessage = error.userMessage || 'Failed to create task';
+            this.showError(errorMessage);
         } finally {
             this.hideLoading();
         }

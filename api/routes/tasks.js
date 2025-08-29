@@ -3,6 +3,7 @@ const router = express.Router();
 const taskService = require('../services/taskService');
 const { createAuditMiddleware } = require('../middleware/auditLog');
 const { logger } = require('../middleware/logger');
+const validation = require('../middleware/validation');
 
 /**
  * @swagger
@@ -163,6 +164,7 @@ router.get('/:id', async (req, res, next) => {
  *         description: Invalid input
  */
 router.post('/', 
+  validation.validateTask,
   createAuditMiddleware('create_task', 'task'),
   async (req, res, next) => {
     try {
@@ -232,6 +234,7 @@ router.post('/',
  *         description: Task not found
  */
 router.put('/:id',
+  validation.validateTask,
   createAuditMiddleware('update_task', 'task'),
   async (req, res, next) => {
     try {
@@ -502,6 +505,7 @@ router.get('/:id/items', async (req, res, next) => {
  *         description: Invalid input
  */
 router.post('/:id/items',
+  validation.validateListItem,
   createAuditMiddleware('add_item', 'list_item'),
   async (req, res, next) => {
     try {
@@ -559,6 +563,7 @@ router.post('/:id/items',
  *         description: Updated item
  */
 router.put('/:id/items/:itemId',
+  validation.validateListItem,
   createAuditMiddleware('update_item', 'list_item'),
   async (req, res, next) => {
     try {

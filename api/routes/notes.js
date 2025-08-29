@@ -3,6 +3,7 @@ const router = express.Router();
 const noteService = require('../services/noteService');
 const { createAuditMiddleware } = require('../middleware/auditLog');
 const { logger } = require('../middleware/logger');
+const validation = require('../middleware/validation');
 
 /**
  * @swagger
@@ -178,6 +179,7 @@ router.get('/:id', async (req, res, next) => {
  *         description: Invalid input
  */
 router.post('/',
+  validation.validateNote,
   createAuditMiddleware('create_note', 'note'),
   async (req, res, next) => {
     try {
@@ -250,6 +252,7 @@ router.post('/',
  *         description: Note not found
  */
 router.put('/:id',
+  validation.validateNote,
   createAuditMiddleware('update_note', 'note'),
   async (req, res, next) => {
     try {

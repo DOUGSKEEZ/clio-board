@@ -167,7 +167,6 @@
 - [x] **Note drag-and-drop** - Full drag-drop between all 4 columns with position persistence
 - [x] **Note-to-task conversion** - Convert note to task with column selection modal
 - [x] **Note archiving** - Archive/restore functionality implemented
-- [ ] **Note deletion** - Hard delete not yet implemented (using archive instead)
 - [x] **Agent integration** - API supports agent note creation with X-Agent-Key auth
 - [x] **Routine integration** - Notes can be assigned to routines and viewed in routine modal
 - [x] **Mini-board Notes** - Routine modal shows all notes for that routine with ghost cards
@@ -203,7 +202,7 @@
 - [x] **Performance tuning** - Event delegation implemented for better render performance ✅ COMPLETED
 - [ ] **Additional UX polish** - Micro-interactions and visual refinements
 
-### ✅ MOBILE-IFICATION (Phase 4 Complete!)
+### ✅ MOBILE-IFICATION
 - [x] **Mobile viewport support** - Already had proper viewport meta tag configured
 - [x] **Horizontal scrolling** - Task board columns scroll horizontally on mobile
 - [x] **Touch drag delay** - 300ms delay on mobile to prevent accidental dragging while scrolling
@@ -213,13 +212,47 @@
 - [x] **Header centering** - Tasks/Routines/Notes tabs centered in header bar
 - [x] **Mobile header spacing** - Reduced padding, gaps, and font sizes for better mobile fit
 
-## Phase 5: Advanced Features 🔮 FUTURE
+## Phase 5: Critical Security Hardening 🔴 IMMEDIATE (1-2 hours)
+- [x] **Input validation** - Prevent database bloat attacks ✅ COMPLETED!
+  - [x] Task titles: max 100 chars (plenty for task names)
+  - [x] Task notes: max 20,000 chars (same as note content for seamless conversion)
+  - [x] Note content: max 20,000 chars (~4 pages for instruction manuals)
+  - [x] List item text: max 100 chars (plenty for single items)
+  - [x] Routine titles: max 45 chars (plenty for routine names)
+  - [x] Routine descriptions: max 100 chars (brief descriptions)
+  - [x] Return 400 Bad Request with clear, actionable error messages
+- [x] **Frontend error handling** - Display specific validation errors ✅ COMPLETED!
+  - [x] "Title too long" - Clear, immediate understanding
+  - [x] "Description too long" - For task notes and routine descriptions  
+  - [x] "List item content too long" - Specific to list items
+  - [x] "Content exceeds limit" - For note content
+  - [x] Fixed network error popup interference (no more "Failed after 4 attempts" for validation)
+
+## Phase 6: Entity Limits & Advanced Features 🟡 NEXT SPRINT
+- [ ] **Entity count protection** - Prevent resource exhaustion (2-3 hours)
+  - [ ] Max 500 total active tasks (across all columns)
+  - [ ] Max 100 routines
+  - [ ] Max 100 items per task list
+  - [ ] Max 1000 notes
+  - [ ] Return 429 "Too Many Entities" when limits exceeded
+- [ ] **Database query timeouts** - Prevent slow query DoS (1 hour)
+  - [ ] 5-second timeout on SELECT queries
+  - [ ] 10-second timeout on complex JOINs
+- [ ] **Enhanced rate limiting** (30 min)
+  - [ ] Reduce agent rate to 100 req/min (from 500)
+  - [ ] Implement per-endpoint specific limits
 - [ ] Analytics dashboard
 - [ ] Search functionality (archived tasks only)
 - [ ] Undo/redo system
-- [ ] Keyboard shortcuts (if i can think of any I dont already use esc/enter/ctrl+enter)
 
-## Phase 6: SUPER Advanced Features 🔮 FUTURE
+## Phase 7: Archive Management & SUPER Advanced Features 🟢 FUTURE
+- [ ] **Archive lifecycle management** (major feature - 1 week)
+  - [ ] Auto-archive completed tasks older than 90 days
+  - [ ] "Cold storage" export after 180 days to JSON files
+  - [ ] Filesystem/Key West storage for long-term archive
+  - [ ] Search interface for cold storage archives
+  - [ ] Preserve critical info (passwords, credentials) indefinitely
+  - [ ] Audit log rotation (keep 30 days active, archive rest)
 - [ ] WebSocket real-time updates 
 
 
