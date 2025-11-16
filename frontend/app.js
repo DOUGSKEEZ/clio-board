@@ -358,16 +358,18 @@ class ClioBoardApp {
     }
 
     renderColumn(column) {
-        const columnTasks = this.tasks.filter(task => task.column_name === column);
+        const columnTasks = this.tasks
+            .filter(task => task.column_name === column)
+            .sort((a, b) => (a.position || 0) - (b.position || 0));
         const container = document.getElementById(`${this.getColumnId(column)}-tasks`);
-        
+
         if (!container) {
             console.error(`Container not found for column: ${column}`);
             return;
         }
-        
+
         container.innerHTML = '';
-        
+
         columnTasks.forEach(task => {
             const taskElement = this.createTaskCard(task);
             container.appendChild(taskElement);
@@ -425,6 +427,10 @@ class ClioBoardApp {
                             <i class="fas fa-ellipsis-h text-sm"></i>
                         </button>
                         <div class="task-menu absolute -left-10 bottom-3 mb-1 bg-white border border-gray-200 rounded-md shadow-lg z-[200] min-w-[80px] hidden">
+                            <button class="move-to-top-btn w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2" data-task-id="${task.id}">
+                                <i class="fas fa-arrow-up text-xs"></i>
+                                <span>Move to top</span>
+                            </button>
                             <button class="archive-task-btn w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2" data-task-id="${task.id}">
                                 <i class="fas fa-archive text-xs"></i>
                                 <span>Archive</span>
@@ -1033,6 +1039,11 @@ class ClioBoardApp {
 
     // Event Handlers
     setupEventListeners() {
+        // Logo click - refresh and navigate to tasks
+        document.getElementById('logo').addEventListener('click', () => {
+            window.location.reload();
+        });
+
         // Tab navigation
         document.querySelectorAll('.nav-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
@@ -1863,16 +1874,32 @@ class ClioBoardApp {
                 return;
             }
             
+            // Move to top button
+            if (e.target.matches('.move-to-top-btn') || e.target.closest('.move-to-top-btn')) {
+                const moveBtn = e.target.closest('.move-to-top-btn');
+                const taskCard = moveBtn.closest('.task-card');
+                const taskId = taskCard.dataset.taskId;
+
+                e.stopPropagation();
+
+                this.handleMoveToTop(taskId);
+
+                // Close menu
+                const menu = taskCard.querySelector('.task-menu');
+                if (menu) menu.classList.add(ClioBoardApp.CSS_CLASSES.HIDDEN);
+                return;
+            }
+
             // Archive button
             if (e.target.matches('.archive-task-btn') || e.target.closest('.archive-task-btn')) {
                 const archiveBtn = e.target.closest('.archive-task-btn');
                 const taskCard = archiveBtn.closest('.task-card');
                 const taskId = taskCard.dataset.taskId;
-                
+
                 e.stopPropagation();
-                
+
                 this.handleTaskArchive(taskId);
-                
+
                 // Close menu
                 const menu = taskCard.querySelector('.task-menu');
                 if (menu) menu.classList.add(ClioBoardApp.CSS_CLASSES.HIDDEN);
@@ -3123,11 +3150,11 @@ class ClioBoardApp {
     async handleTaskArchive(taskId) {
         try {
             console.log(`📦 Archiving task ${taskId}`);
-            
+
             await this.apiCall(`/api/tasks/${taskId}/archive`, {
                 method: 'PUT'
             });
-            
+
             // Refresh board to remove archived task and update routine counts
             await this.loadTasks();
             await this.loadRoutines(); // Refresh routine task counts
@@ -3135,6 +3162,43 @@ class ClioBoardApp {
         } catch (error) {
             console.error('Failed to archive task:', error);
             this.showError('Failed to archive task');
+        }
+    }
+
+    async handleMoveToTop(taskId) {
+        const task = this.findTaskById(taskId);
+        if (!task) {
+            console.error(`Task ${taskId} not found`);
+            return;
+        }
+
+        const columnName = task.column_name;
+        const oldPosition = task.position;
+
+        console.log(`⬆️ Moving task ${taskId} to top of ${columnName}`);
+
+        // Optimistically update local state
+        const columnTasks = this.tasks.filter(t => t.column_name === columnName);
+        columnTasks.forEach(t => {
+            if (t.id === taskId) {
+                t.position = 0;
+            } else if (t.position < oldPosition) {
+                t.position += 1;
+            }
+        });
+
+        // Immediately re-render
+        this.renderBoard();
+
+        // Sync with server in background
+        try {
+            await this.moveTask(taskId, columnName, 0);
+        } catch (error) {
+            console.error('Failed to move task to top:', error);
+            this.showError('Failed to sync - reloading');
+            // Revert on failure
+            await this.loadTasks();
+            this.renderBoard();
         }
     }
 
