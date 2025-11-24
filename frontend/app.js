@@ -1527,15 +1527,14 @@ class ClioBoardApp {
         if (isOnline) {
             statusIndicator.className = 'fixed top-16 left-0 right-0 z-40 text-center py-2 text-sm font-medium transition-all duration-300 bg-green-600 text-white translate-y-0';
             statusIndicator.textContent = '🟢 Connection restored';
-            
+
             // Hide the indicator after 3 seconds
             setTimeout(() => {
-                statusIndicator.style.transform = 'translateY(-100%)';
+                statusIndicator.className = 'fixed top-16 left-0 right-0 z-40 text-center py-2 text-sm font-medium transition-all duration-300 bg-green-600 text-white -translate-y-full opacity-0 pointer-events-none';
             }, 3000);
         } else {
             statusIndicator.className = 'fixed top-16 left-0 right-0 z-40 text-center py-2 text-sm font-medium transition-all duration-300 bg-red-600 text-white translate-y-0';
             statusIndicator.textContent = '🔴 No internet connection - working offline';
-            statusIndicator.style.transform = 'translateY(0)';
         }
     }
     
