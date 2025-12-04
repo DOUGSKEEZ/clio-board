@@ -51,26 +51,10 @@ class TaskService {
       query += ' ORDER BY t.column_name, t.position, t.created_at';
 
       const result = await pool.query(query, values);
-      
-      // Normalize positions within each column (0, 1, 2, ...)
-      const tasks = result.rows;
-      const tasksByColumn = {};
-      
-      tasks.forEach(task => {
-        if (!tasksByColumn[task.column_name]) {
-          tasksByColumn[task.column_name] = [];
-        }
-        tasksByColumn[task.column_name].push(task);
-      });
-      
-      // Assign normalized positions
-      Object.keys(tasksByColumn).forEach(column => {
-        tasksByColumn[column].forEach((task, index) => {
-          task.position = index;
-        });
-      });
-      
-      return tasks;
+
+      // Return tasks with their actual database positions
+      // (positions may have gaps to accommodate dividers in the Today column)
+      return result.rows;
     } catch (error) {
       logger.error('Error fetching tasks', { error: error.message });
       throw error;
@@ -534,30 +518,61 @@ class TaskService {
    */
   /**
    * Renumber all task positions in a column to be sequential (0, 1, 2, ...)
+   * For the 'today' column, also includes dividers in the position sequence
    */
   async renumberColumnPositions(column) {
     try {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        
-        // Get all tasks in the column ordered by current position
-        const result = await client.query(`
-          SELECT id FROM tasks 
-          WHERE column_name = $1 AND is_archived = false 
-          ORDER BY position, created_at
-        `, [column]);
-        
-        // Update each task with its new sequential position
-        for (let i = 0; i < result.rows.length; i++) {
-          await client.query(
-            'UPDATE tasks SET position = $1 WHERE id = $2',
-            [i, result.rows[i].id]
-          );
+
+        if (column === 'today') {
+          // For Today column, get both tasks AND dividers, then renumber together
+          const result = await client.query(`
+            SELECT id, 'task' as type, position FROM tasks
+            WHERE column_name = 'today' AND is_archived = false
+            UNION ALL
+            SELECT id, 'divider' as type, position FROM column_dividers
+            WHERE column_name = 'today'
+            ORDER BY position, type
+          `);
+
+          // Update each item with its new sequential position
+          for (let i = 0; i < result.rows.length; i++) {
+            const item = result.rows[i];
+            if (item.type === 'task') {
+              await client.query(
+                'UPDATE tasks SET position = $1 WHERE id = $2',
+                [i, item.id]
+              );
+            } else {
+              await client.query(
+                'UPDATE column_dividers SET position = $1 WHERE id = $2',
+                [i, item.id]
+              );
+            }
+          }
+
+          logger.debug('Renumbered positions for today (with dividers)', { count: result.rows.length });
+        } else {
+          // For other columns, just renumber tasks
+          const result = await client.query(`
+            SELECT id FROM tasks
+            WHERE column_name = $1 AND is_archived = false
+            ORDER BY position, created_at
+          `, [column]);
+
+          for (let i = 0; i < result.rows.length; i++) {
+            await client.query(
+              'UPDATE tasks SET position = $1 WHERE id = $2',
+              [i, result.rows[i].id]
+            );
+          }
+
+          logger.debug('Renumbered positions for column', { column, count: result.rows.length });
         }
-        
+
         await client.query('COMMIT');
-        logger.debug('Renumbered positions for column', { column, count: result.rows.length });
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;
@@ -611,46 +626,88 @@ class TaskService {
             if (newPosition < oldPosition) {
               // Moving up: shift tasks down between new and old position
               await client.query(`
-                UPDATE tasks 
+                UPDATE tasks
                 SET position = position + 1, updated_at = NOW()
-                WHERE column_name = $1 
-                  AND position >= $2 
-                  AND position < $3 
+                WHERE column_name = $1
+                  AND position >= $2
+                  AND position < $3
                   AND id != $4
                   AND is_archived = false
               `, [newColumn, newPosition, oldPosition, taskId]);
+
+              // Also shift dividers in Today column
+              if (newColumn === 'today') {
+                await client.query(`
+                  UPDATE column_dividers
+                  SET position = position + 1
+                  WHERE column_name = 'today'
+                    AND position >= $1
+                    AND position < $2
+                `, [newPosition, oldPosition]);
+              }
             } else {
               // Moving down: shift tasks up between old and new position
               await client.query(`
-                UPDATE tasks 
+                UPDATE tasks
                 SET position = position - 1, updated_at = NOW()
-                WHERE column_name = $1 
-                  AND position > $2 
-                  AND position <= $3 
+                WHERE column_name = $1
+                  AND position > $2
+                  AND position <= $3
                   AND id != $4
                   AND is_archived = false
               `, [newColumn, oldPosition, newPosition, taskId]);
+
+              // Also shift dividers in Today column
+              if (newColumn === 'today') {
+                await client.query(`
+                  UPDATE column_dividers
+                  SET position = position - 1
+                  WHERE column_name = 'today'
+                    AND position > $1
+                    AND position <= $2
+                `, [oldPosition, newPosition]);
+              }
             }
           }
         } else {
           // Moving to different column
           // Shift tasks down in the new column to make room
           await client.query(`
-            UPDATE tasks 
+            UPDATE tasks
             SET position = position + 1, updated_at = NOW()
-            WHERE column_name = $1 
-              AND position >= $2 
+            WHERE column_name = $1
+              AND position >= $2
               AND is_archived = false
           `, [newColumn, newPosition]);
-          
+
+          // Also shift dividers if moving INTO Today column
+          if (newColumn === 'today') {
+            await client.query(`
+              UPDATE column_dividers
+              SET position = position + 1
+              WHERE column_name = 'today'
+                AND position >= $1
+            `, [newPosition]);
+          }
+
           // Shift tasks up in the old column to fill the gap
           await client.query(`
-            UPDATE tasks 
+            UPDATE tasks
             SET position = position - 1, updated_at = NOW()
-            WHERE column_name = $1 
-              AND position > $2 
+            WHERE column_name = $1
+              AND position > $2
               AND is_archived = false
           `, [oldColumn, oldPosition]);
+
+          // Also shift dividers if moving OUT OF Today column
+          if (oldColumn === 'today') {
+            await client.query(`
+              UPDATE column_dividers
+              SET position = position - 1
+              WHERE column_name = 'today'
+                AND position > $1
+            `, [oldPosition]);
+          }
         }
         
         // Update the task itself

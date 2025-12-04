@@ -234,6 +234,37 @@ const swaggerDefinition = {
             format: 'date-time'
           }
         }
+      },
+      Divider: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+            description: 'Divider ID'
+          },
+          column_name: {
+            type: 'string',
+            enum: ['today'],
+            description: 'Column where divider appears (currently only Today)'
+          },
+          label_above: {
+            type: 'string',
+            description: 'Label shown above the line (e.g., Morning)'
+          },
+          label_below: {
+            type: 'string',
+            description: 'Label shown below the line (e.g., Afternoon)'
+          },
+          position: {
+            type: 'integer',
+            description: 'Position for ordering alongside tasks'
+          },
+          created_at: {
+            type: 'string',
+            format: 'date-time'
+          }
+        }
       }
     }
   }

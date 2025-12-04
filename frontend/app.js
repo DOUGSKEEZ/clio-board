@@ -42,6 +42,7 @@ class ClioBoardApp {
         this.tasks = [];
         this.routines = [];
         this.archivedTasks = [];
+        this.dividers = []; // Time-of-day dividers for Today column
         this.apiUrl = window.location.origin;
         this.sortables = {};
         this.expandedLists = new Set(); // Track which lists are expanded
@@ -72,7 +73,11 @@ class ClioBoardApp {
             console.log('📡 Loading routines...');
             await this.loadRoutines();
             console.log(`🏷️ Loaded ${this.routines.length} routines`);
-            
+
+            console.log('📡 Loading dividers...');
+            await this.loadDividers();
+            console.log(`📍 Loaded ${this.dividers.length} dividers`);
+
             // Render board
             console.log('🎨 Rendering board...');
             this.renderBoard();
@@ -306,6 +311,23 @@ class ClioBoardApp {
         this.routines = await this.apiCall('/api/routines');
     }
 
+    async loadDividers() {
+        this.dividers = await this.apiCall('/api/dividers');
+    }
+
+    async moveDivider(dividerId, newPosition) {
+        const updatedDivider = await this.apiCall(`/api/dividers/${dividerId}/move`, {
+            method: 'PUT',
+            body: JSON.stringify({ position: newPosition })
+        });
+        // Update local state
+        const index = this.dividers.findIndex(d => d.id === dividerId);
+        if (index !== -1) {
+            this.dividers[index] = updatedDivider;
+        }
+        return updatedDivider;
+    }
+
     async createTask(taskData) {
         console.log('➕ Creating task:', taskData.title);
         const newTask = await this.apiCall('/api/tasks', {
@@ -360,7 +382,20 @@ class ClioBoardApp {
     renderColumn(column) {
         const columnTasks = this.tasks
             .filter(task => task.column_name === column)
-            .sort((a, b) => (a.position || 0) - (b.position || 0));
+            .map(task => ({ ...task, _type: 'task' }));
+
+        // For Today column, merge dividers with tasks
+        let items = columnTasks;
+        if (column === 'today') {
+            const columnDividers = this.dividers
+                .filter(d => d.column_name === 'today')
+                .map(d => ({ ...d, _type: 'divider' }));
+            items = [...columnTasks, ...columnDividers];
+        }
+
+        // Sort all items by position
+        items.sort((a, b) => (a.position || 0) - (b.position || 0));
+
         const container = document.getElementById(`${this.getColumnId(column)}-tasks`);
 
         if (!container) {
@@ -370,24 +405,52 @@ class ClioBoardApp {
 
         container.innerHTML = '';
 
-        columnTasks.forEach(task => {
-            const taskElement = this.createTaskCard(task);
-            container.appendChild(taskElement);
+        items.forEach(item => {
+            if (item._type === 'divider') {
+                const dividerElement = this.createDividerElement(item);
+                container.appendChild(dividerElement);
+            } else {
+                const taskElement = this.createTaskCard(item);
+                container.appendChild(taskElement);
+            }
         });
-        
+
         // Add ghost "Add Task" card at the bottom (inside the container for proper spacing)
         const addCard = document.createElement('div');
         addCard.className = 'add-task-ghost-card group bg-transparent border-2 border-dashed border-gray-300 border-opacity-50 rounded-lg p-2 hover:border-opacity-100 hover:border-blue-400 hover:bg-blue-50 hover:bg-opacity-60 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center text-gray-400 hover:text-blue-500 min-h-[40px]';
         addCard.innerHTML = `
             <i class="fas fa-plus text-sm transition-transform duration-200 group-hover:scale-150"></i>
         `;
-        
+
         // Add click handler to open add task modal with this column pre-selected
         addCard.addEventListener('click', () => {
             this.openAddTaskModal(column);
         });
-        
+
         container.appendChild(addCard);
+    }
+
+    createDividerElement(divider) {
+        const div = document.createElement('div');
+        div.className = 'column-divider my-3 py-2 cursor-grab select-none';
+        div.setAttribute('data-divider-id', divider.id);
+        div.setAttribute('data-position', divider.position);
+
+        div.innerHTML = `
+            <div class="flex items-center justify-center text-xs text-gray-400 mb-1.5">
+                <i class="fas fa-chevron-up text-[10px] mr-1 opacity-60"></i>
+                <span class="uppercase tracking-wider font-medium">${divider.label_above}</span>
+            </div>
+            <div class="relative flex items-center justify-center">
+                <div class="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+            </div>
+            <div class="flex items-center justify-center text-xs text-gray-400 mt-1.5">
+                <i class="fas fa-chevron-down text-[10px] mr-1 opacity-60"></i>
+                <span class="uppercase tracking-wider font-medium">${divider.label_below}</span>
+            </div>
+        `;
+
+        return div;
     }
 
     createTaskCard(task) {
@@ -4187,6 +4250,16 @@ class ClioBoardApp {
                 filter: '.add-task-ghost-card',  // Can't drag the ghost card
                 delay: isMobile ? 300 : 0,  // 300ms delay on mobile, instant on desktop
                 delayOnTouchOnly: true,  // Only apply delay to touch events
+                onMove: (evt) => {
+                    // Prevent dividers from being dragged to other columns
+                    const draggedItem = evt.dragged;
+                    const targetColumn = evt.to.closest('[data-column]')?.getAttribute('data-column');
+
+                    if (draggedItem.classList.contains('column-divider') && targetColumn !== 'today') {
+                        return false; // Cancel the move
+                    }
+                    return true;
+                },
                 onChange: (evt) => {
                     // Keep ghost card at the bottom during drag
                     const ghostCard = evt.to.querySelector('.add-task-ghost-card');
@@ -4200,7 +4273,7 @@ class ClioBoardApp {
                     if (ghostCard) {
                         evt.to.appendChild(ghostCard);
                     }
-                    
+
                     this.handleDragEnd(evt);
                 }
             });
@@ -4213,21 +4286,79 @@ class ClioBoardApp {
 
     async handleDragEnd(evt) {
         const taskId = evt.item.getAttribute('data-task-id');
+        const dividerId = evt.item.getAttribute('data-divider-id');
         const newColumn = evt.to.closest('[data-column]').getAttribute('data-column');
-        
+        const oldColumn = evt.from.closest('[data-column]').getAttribute('data-column');
+
+        // Handle divider movement
+        if (dividerId) {
+            // Dividers can only stay in the Today column
+            if (newColumn !== 'today') {
+                // Move it back - reload to revert
+                await this.loadDividers();
+                this.renderColumn('today');
+                return;
+            }
+
+            // Calculate new position based on DOM order
+            const columnContainer = evt.to;
+            const allItems = Array.from(columnContainer.querySelectorAll('.task-card, .column-divider'));
+            let position = 0;
+
+            // Assign positions based on DOM order
+            for (let i = 0; i < allItems.length; i++) {
+                const item = allItems[i];
+                if (item.getAttribute('data-divider-id') === dividerId) {
+                    position = i;
+                    break;
+                }
+            }
+
+            console.log(`📍 Divider moved to position ${position} in today column`);
+
+            try {
+                await this.moveDivider(dividerId, position);
+                // Reload to get synced positions from backend
+                await this.loadTasks();
+                await this.loadDividers();
+                this.renderColumn('today');
+            } catch (error) {
+                console.error('Failed to move divider:', error);
+                await this.loadDividers();
+                this.renderColumn('today');
+            }
+            return;
+        }
+
+        // Handle task movement
         if (!taskId || !newColumn) return;
-        
-        // Calculate the actual position (DOM index might include ghost card)
-        // Get all task cards in the new column (excluding ghost card)
+
+        // Calculate the actual position based on DOM order
         const columnContainer = evt.to;
-        const allCards = Array.from(columnContainer.querySelectorAll('.task-card'));
-        const taskIndex = allCards.findIndex(card => card.getAttribute('data-task-id') === taskId);
-        const newPosition = taskIndex >= 0 ? taskIndex : 0;
-        
+        const allItems = Array.from(columnContainer.querySelectorAll('.task-card, .column-divider'));
+        let newPosition = 0;
+
+        for (let i = 0; i < allItems.length; i++) {
+            const item = allItems[i];
+            if (item.getAttribute('data-task-id') === taskId) {
+                newPosition = i;
+                break;
+            }
+        }
+
         console.log(`📍 Task moved to position ${newPosition} in ${newColumn} column`);
-        
+
         try {
             await this.moveTask(taskId, newColumn, newPosition);
+            // Reload today column to get synced positions (backend renumbers with dividers)
+            if (newColumn === 'today' || oldColumn === 'today') {
+                await this.loadTasks();
+                await this.loadDividers();
+                this.renderColumn('today');
+                if (oldColumn !== 'today' && oldColumn) {
+                    this.renderColumn(oldColumn);
+                }
+            }
             this.updateTaskCounts();
         } catch (error) {
             console.error('Failed to move task:', error);

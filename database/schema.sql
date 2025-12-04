@@ -80,7 +80,19 @@ CREATE TABLE notes (
     archived_at TIMESTAMP NULL
 );
 
--- 5. Audit Log Table (Track all changes for undo/agent monitoring)
+-- 5. Column Dividers Table (Visual separators for Today column)
+-- These are NOT tasks - they're UI elements for organizing by time-of-day
+-- Only in Today column, cannot be archived or moved to other columns
+CREATE TABLE column_dividers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    column_name VARCHAR(20) CHECK (column_name IN ('today')) DEFAULT 'today',
+    label_above VARCHAR(50) NOT NULL,  -- e.g., "Morning", "Afternoon"
+    label_below VARCHAR(50) NOT NULL,  -- e.g., "Afternoon", "Evening"
+    position INTEGER NOT NULL DEFAULT 0,  -- Same position system as tasks
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 6. Audit Log Table (Track all changes for undo/agent monitoring)
 CREATE TABLE audit_log (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     actor VARCHAR(10) CHECK (actor IN ('user', 'agent')) NOT NULL,
@@ -114,6 +126,8 @@ CREATE INDEX idx_notes_type ON notes(type, created_at);
 
 CREATE INDEX idx_audit_log_entity ON audit_log(entity_type, entity_id, created_at);
 CREATE INDEX idx_audit_log_actor ON audit_log(actor, created_at);
+
+CREATE INDEX idx_column_dividers_position ON column_dividers(column_name, position);
 
 -- Triggers for automatic timestamp updates
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -162,9 +176,15 @@ INSERT INTO notes (title, content, type, column_position) VALUES
     ('System Observation', 'User tends to create more tasks on Monday mornings', 'agent', 3),
     ('Pattern Analysis', 'Bathroom project tasks are taking longer than estimated', 'agent', 4);
 
+-- Default column dividers for Today column (Morning/Afternoon/Evening sections)
+INSERT INTO column_dividers (id, column_name, label_above, label_below, position) VALUES
+    ('550e8400-e29b-41d4-a716-446655440201', 'today', 'Morning', 'Afternoon', 100),
+    ('550e8400-e29b-41d4-a716-446655440202', 'today', 'Afternoon', 'Evening', 200);
+
 -- Comments explaining key design decisions
 COMMENT ON TABLE tasks IS 'Core entity: tasks automatically convert between simple tasks and lists based on presence of list_items';
 COMMENT ON COLUMN tasks.type IS 'AUTO-MANAGED: task->list when first item added, list->task when last item deleted';
 COMMENT ON COLUMN tasks.archived_items IS 'Preserves snapshot of list items when task is archived';
 COMMENT ON TABLE list_items IS 'Only exists for tasks where type=list. Simple text entries with checkboxes';
 COMMENT ON TABLE audit_log IS 'Complete change history for undo functionality and agent monitoring';
+COMMENT ON TABLE column_dividers IS 'Visual time-of-day separators for Today column. Not tasks - purely UI elements for organization';

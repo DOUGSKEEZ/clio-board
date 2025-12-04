@@ -285,7 +285,28 @@
         .sortable-drag {
             opacity: 1;
         }
-        
+
+        /* Column divider styles (Morning/Afternoon/Evening separators) */
+        .column-divider {
+            transition: all 0.2s ease;
+            border-radius: 4px;
+        }
+        .column-divider:hover {
+            background: rgba(59, 130, 246, 0.05);
+        }
+        .column-divider:active {
+            cursor: grabbing;
+        }
+        .column-divider.sortable-chosen {
+            transform: none;
+            background: rgba(59, 130, 246, 0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .column-divider.sortable-ghost {
+            opacity: 0.4;
+            background: rgba(59, 130, 246, 0.1);
+        }
+
         /* iOS Safari touch behavior fixes */
         .task-card, .routine-card, .note-card {
             -webkit-touch-callout: none; /* Disable callout */
