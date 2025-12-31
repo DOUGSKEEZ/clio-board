@@ -1,9 +1,75 @@
 const express = require('express');
 const router = express.Router();
 const taskService = require('../services/taskService');
+const llmSummaryService = require('../services/llmSummaryService');
 const { createAuditMiddleware } = require('../middleware/auditLog');
 const { logger } = require('../middleware/logger');
 const validation = require('../middleware/validation');
+
+/**
+ * @swagger
+ * /api/tasks/summary:
+ *   get:
+ *     summary: Get LLM-optimized tasks summary
+ *     description: |
+ *       Returns tasks grouped by column with minimal fields.
+ *       Optimized for LLM context (~900 chars for 15-20 tasks).
+ *
+ *       Use this endpoint when you need a quick overview of all tasks
+ *       without consuming excessive context tokens.
+ *     tags: [Tasks, LLM Summary]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 5
+ *         description: Max tasks per column
+ *       - in: query
+ *         name: columns
+ *         schema:
+ *           type: string
+ *         description: Comma-separated column filter (e.g., "Today,Tomorrow")
+ *       - in: query
+ *         name: routine
+ *         schema:
+ *           type: string
+ *         description: Filter by routine name or ID
+ *     responses:
+ *       200:
+ *         description: Tasks summary grouped by column
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of active tasks
+ *                 byColumn:
+ *                   type: object
+ *                   description: Tasks grouped by column name
+ *                 overdue:
+ *                   type: integer
+ *                   description: Count of overdue tasks
+ *                 dueThisWeek:
+ *                   type: integer
+ *                   description: Count of tasks due this week
+ */
+router.get('/summary', async (req, res, next) => {
+  try {
+    const options = {
+      limit: req.query.limit ? parseInt(req.query.limit) : 5,
+      columns: req.query.columns || null,
+      routine: req.query.routine || null
+    };
+
+    const summary = await llmSummaryService.getTasksSummary(options);
+    res.json(summary);
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * @swagger
@@ -119,6 +185,78 @@ router.get('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Task not found' });
     }
     res.json(task);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/tasks/{id}/context:
+ *   get:
+ *     summary: Get LLM-optimized task context
+ *     description: |
+ *       Returns full context for a single task in a concise format.
+ *       Includes description, checklist items, and routine membership.
+ *       Optimized for LLM context (~550 chars).
+ *
+ *       Use this endpoint when you need complete details about a specific task.
+ *     tags: [Tasks, LLM Summary]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Task ID
+ *     responses:
+ *       200:
+ *         description: Task context
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                   format: uuid
+ *                 title:
+ *                   type: string
+ *                 description:
+ *                   type: string
+ *                   nullable: true
+ *                 column:
+ *                   type: string
+ *                 routine:
+ *                   type: string
+ *                   nullable: true
+ *                 due:
+ *                   type: string
+ *                   format: date
+ *                   nullable: true
+ *                 created:
+ *                   type: string
+ *                   format: date
+ *                 checklist:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       text:
+ *                         type: string
+ *                       done:
+ *                         type: boolean
+ *       404:
+ *         description: Task not found
+ */
+router.get('/:id/context', async (req, res, next) => {
+  try {
+    const context = await llmSummaryService.getTaskContext(req.params.id);
+    if (!context) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    res.json(context);
   } catch (error) {
     next(error);
   }

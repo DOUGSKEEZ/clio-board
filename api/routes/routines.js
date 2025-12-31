@@ -1,9 +1,80 @@
 const express = require('express');
 const router = express.Router();
 const routineService = require('../services/routineService');
+const llmSummaryService = require('../services/llmSummaryService');
 const { createAuditMiddleware } = require('../middleware/auditLog');
 const { logger } = require('../middleware/logger');
 const validation = require('../middleware/validation');
+
+/**
+ * @swagger
+ * /api/routines/summary:
+ *   get:
+ *     summary: Get LLM-optimized routines summary
+ *     description: |
+ *       Returns routines with their associated tasks and notes.
+ *       Optimized for LLM context (~800 chars for 5 routines).
+ *
+ *       Use this endpoint to understand task/note organization.
+ *     tags: [Routines, LLM Summary]
+ *     parameters:
+ *       - in: query
+ *         name: includeItems
+ *         schema:
+ *           type: boolean
+ *           default: true
+ *         description: Include tasks/notes per routine
+ *       - in: query
+ *         name: itemLimit
+ *         schema:
+ *           type: integer
+ *           default: 3
+ *         description: Max tasks/notes per routine
+ *     responses:
+ *       200:
+ *         description: Routines summary with contents
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                 active:
+ *                   type: integer
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                       name:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                         enum: [active, paused, completed]
+ *                       icon:
+ *                         type: string
+ *                       tasks:
+ *                         type: array
+ *                       notes:
+ *                         type: array
+ */
+router.get('/summary', async (req, res, next) => {
+  try {
+    const options = {
+      includeItems: req.query.includeItems !== 'false',
+      itemLimit: req.query.itemLimit ? parseInt(req.query.itemLimit) : 3
+    };
+
+    const summary = await llmSummaryService.getRoutinesSummary(options);
+    res.json(summary);
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * @swagger
@@ -101,6 +172,65 @@ router.get('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Routine not found' });
     }
     res.json(routine);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/routines/{id}/summary:
+ *   get:
+ *     summary: Get LLM-optimized single routine detail
+ *     description: |
+ *       Returns full detail for one routine with all its items.
+ *       Optimized for LLM context (~600 chars).
+ *
+ *       Use this endpoint for deep-dive into a specific routine.
+ *     tags: [Routines, LLM Summary]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Routine ID
+ *     responses:
+ *       200:
+ *         description: Routine detail with all tasks and notes
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                   format: uuid
+ *                 name:
+ *                   type: string
+ *                 status:
+ *                   type: string
+ *                 icon:
+ *                   type: string
+ *                 taskCount:
+ *                   type: integer
+ *                 noteCount:
+ *                   type: integer
+ *                 tasks:
+ *                   type: array
+ *                 notes:
+ *                   type: array
+ *       404:
+ *         description: Routine not found
+ */
+router.get('/:id/summary', async (req, res, next) => {
+  try {
+    const summary = await llmSummaryService.getRoutineSummary(req.params.id);
+    if (!summary) {
+      return res.status(404).json({ error: 'Routine not found' });
+    }
+    res.json(summary);
   } catch (error) {
     next(error);
   }

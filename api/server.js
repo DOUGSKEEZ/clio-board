@@ -20,6 +20,7 @@ const tasksRouter = require('./routes/tasks');
 const routinesRouter = require('./routes/routines');
 const notesRouter = require('./routes/notes');
 const dividersRouter = require('./routes/dividers');
+const searchRouter = require('./routes/search');
 // const analyticsRouter = require('./routes/analytics'); // TODO: Phase 2
 
 const app = express();
@@ -280,6 +281,7 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/routines', routinesRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/dividers', dividersRouter);
+app.use('/api/search', searchRouter);
 // app.use('/api/analytics', analyticsRouter); // TODO: Phase 2
 
 // Catch-all handler for frontend routing

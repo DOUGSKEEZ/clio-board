@@ -1,9 +1,80 @@
 const express = require('express');
 const router = express.Router();
 const noteService = require('../services/noteService');
+const llmSummaryService = require('../services/llmSummaryService');
 const { createAuditMiddleware } = require('../middleware/auditLog');
 const { logger } = require('../middleware/logger');
 const validation = require('../middleware/validation');
+
+/**
+ * @swagger
+ * /api/notes/summary:
+ *   get:
+ *     summary: Get LLM-optimized notes summary
+ *     description: |
+ *       Returns note titles with short previews.
+ *       Optimized for LLM context (~700 chars for 10 notes).
+ *
+ *       Use this endpoint for a quick overview of notes.
+ *     tags: [Notes, LLM Summary]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Max notes returned
+ *       - in: query
+ *         name: previewLength
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Characters in preview
+ *       - in: query
+ *         name: routine
+ *         schema:
+ *           type: string
+ *         description: Filter by routine name or ID
+ *     responses:
+ *       200:
+ *         description: Notes summary
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                       title:
+ *                         type: string
+ *                       preview:
+ *                         type: string
+ *                       routine:
+ *                         type: string
+ *                         nullable: true
+ */
+router.get('/summary', async (req, res, next) => {
+  try {
+    const options = {
+      limit: req.query.limit ? parseInt(req.query.limit) : 10,
+      previewLength: req.query.previewLength ? parseInt(req.query.previewLength) : 50,
+      routine: req.query.routine || null
+    };
+
+    const summary = await llmSummaryService.getNotesSummary(options);
+    res.json(summary);
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * @swagger
@@ -101,7 +172,9 @@ router.get('/archived', async (req, res, next) => {
  * /api/notes/{id}:
  *   get:
  *     summary: Get a single note by ID
- *     description: Returns a note with associated task/routine info
+ *     description: |
+ *       Returns a note with associated task/routine info.
+ *       Use excerpt=true for LLM-optimized response (~450 chars).
  *     tags: [Notes]
  *     parameters:
  *       - in: path
@@ -111,14 +184,37 @@ router.get('/archived', async (req, res, next) => {
  *           type: string
  *           format: uuid
  *         description: Note ID
+ *       - in: query
+ *         name: excerpt
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Return LLM-optimized excerpt instead of full note
+ *       - in: query
+ *         name: excerptLength
+ *         schema:
+ *           type: integer
+ *           default: 300
+ *         description: Max characters in excerpt (only used when excerpt=true)
  *     responses:
  *       200:
- *         description: Note object
+ *         description: Note object (or excerpt if excerpt=true)
  *       404:
  *         description: Note not found
  */
 router.get('/:id', async (req, res, next) => {
   try {
+    // Check if excerpt mode is requested
+    if (req.query.excerpt === 'true') {
+      const excerptLength = req.query.excerptLength ? parseInt(req.query.excerptLength) : 300;
+      const excerpt = await llmSummaryService.getNoteExcerpt(req.params.id, excerptLength);
+      if (!excerpt) {
+        return res.status(404).json({ error: 'Note not found' });
+      }
+      return res.json(excerpt);
+    }
+
+    // Standard full note response
     const note = await noteService.getNoteById(req.params.id);
     if (!note) {
       return res.status(404).json({ error: 'Note not found' });
