@@ -12,19 +12,19 @@ const validation = require('../middleware/validation');
  *   get:
  *     summary: Get LLM-optimized tasks summary
  *     description: |
- *       Returns tasks grouped by column with minimal fields.
- *       Optimized for LLM context (~900 chars for 15-20 tasks).
+ *       Returns tasks grouped by column with status and checklist items.
+ *       By default returns ALL tasks. Use limit parameter to restrict results.
  *
- *       Use this endpoint when you need a quick overview of all tasks
- *       without consuming excessive context tokens.
+ *       Each task includes:
+ *       - status: "pending", "completed", or "archived"
+ *       - items: checklist items (only for list-type tasks with items)
  *     tags: [Tasks, LLM Summary]
  *     parameters:
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           default: 5
- *         description: Max tasks per column
+ *         description: Max tasks per column (default returns all)
  *       - in: query
  *         name: columns
  *         schema:
@@ -59,7 +59,7 @@ const validation = require('../middleware/validation');
 router.get('/summary', async (req, res, next) => {
   try {
     const options = {
-      limit: req.query.limit ? parseInt(req.query.limit) : 5,
+      limit: req.query.limit ? parseInt(req.query.limit) : null,
       columns: req.query.columns || null,
       routine: req.query.routine || null
     };

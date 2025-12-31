@@ -1,3 +1,19 @@
+---
+title: CLIO-Board API v1.0.0
+language_tabs:
+  - shell: Shell
+  - javascript: JavaScript
+language_clients:
+  - shell: ""
+  - javascript: ""
+toc_footers: []
+includes: []
+search: true
+highlight_theme: darkula
+headingLevel: 2
+
+---
+
 <!-- Generator: Widdershins v4.0.1 -->
 
 <h1 id="clio-board-api">CLIO-Board API v1.0.0</h1>
@@ -29,6 +45,26 @@ Web: <a href="http://192.168.10.21:3000">CLIO Board</a>
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/api/dividers \
   -H 'Accept: application/json'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/dividers',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -109,6 +145,28 @@ curl -X PUT http://192.168.10.21:3000/api/dividers/{id}/move \
 
 ```
 
+```javascript
+const inputBody = '{
+  "position": 0
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/dividers/{id}/move',
+{
+  method: 'PUT',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `PUT /api/dividers/{id}/move`
 
 *Move a divider to a new position*
@@ -155,12 +213,32 @@ curl -X GET http://192.168.10.21:3000/api/notes/summary \
 
 ```
 
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/notes/summary',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `GET /api/notes/summary`
 
 *Get LLM-optimized notes summary*
 
 Returns note titles with short previews.
-Optimized for LLM context (~700 chars for 10 notes).
+By default returns ALL notes. Use limit parameter to restrict results.
 
 Use this endpoint for a quick overview of notes.
 
@@ -168,7 +246,7 @@ Use this endpoint for a quick overview of notes.
 
 |Name|In|Type|Required|Description|
 |---|---|---|---|---|
-|limit|query|integer|false|Max notes returned|
+|limit|query|integer|false|Max notes returned (default returns all)|
 |previewLength|query|integer|false|Characters in preview|
 |routine|query|string|false|Filter by routine name or ID|
 
@@ -221,6 +299,26 @@ This operation does not require authentication
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/api/notes \
   -H 'Accept: application/json'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/notes',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -312,6 +410,34 @@ curl -X POST http://192.168.10.21:3000/api/notes \
 
 ```
 
+```javascript
+const inputBody = '{
+  "title": "string",
+  "content": "string",
+  "type": "user",
+  "source": "manual",
+  "column_position": 1,
+  "task_id": "736fde4d-9029-4915-8189-01353d6982cb",
+  "routine_id": "f53c5ff7-cfb7-4f43-8b79-3421a01d8e2a"
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/notes',
+{
+  method: 'POST',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `POST /api/notes`
 
 *Create a new note*
@@ -377,6 +503,21 @@ curl -X GET http://192.168.10.21:3000/api/notes/archived
 
 ```
 
+```javascript
+
+fetch('http://192.168.10.21:3000/api/notes/archived',
+{
+  method: 'GET'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `GET /api/notes/archived`
 
 *Get all archived notes*
@@ -400,6 +541,21 @@ This operation does not require authentication
 ```shell
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/api/notes/{id}
+
+```
+
+```javascript
+
+fetch('http://192.168.10.21:3000/api/notes/{id}',
+{
+  method: 'GET'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -437,6 +593,30 @@ This operation does not require authentication
 # You can also use wget
 curl -X PUT http://192.168.10.21:3000/api/notes/{id} \
   -H 'Content-Type: application/json'
+
+```
+
+```javascript
+const inputBody = '{
+  "title": "string",
+  "content": "string",
+  "column_position": 1
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/notes/{id}',
+{
+  method: 'PUT',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -488,6 +668,28 @@ curl -X PUT http://192.168.10.21:3000/api/notes/{id}/move \
 
 ```
 
+```javascript
+const inputBody = '{
+  "column": 1
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/notes/{id}/move',
+{
+  method: 'PUT',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `PUT /api/notes/{id}/move`
 
 *Move note to different column*
@@ -528,6 +730,31 @@ This operation does not require authentication
 # You can also use wget
 curl -X POST http://192.168.10.21:3000/api/notes/{id}/convert \
   -H 'Content-Type: application/json'
+
+```
+
+```javascript
+const inputBody = '{
+  "title": "string",
+  "column_name": "today",
+  "routine_id": "f53c5ff7-cfb7-4f43-8b79-3421a01d8e2a",
+  "due_date": "2019-08-24"
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/notes/{id}/convert',
+{
+  method: 'POST',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -589,6 +816,21 @@ curl -X PUT http://192.168.10.21:3000/api/notes/{id}/archive
 
 ```
 
+```javascript
+
+fetch('http://192.168.10.21:3000/api/notes/{id}/archive',
+{
+  method: 'PUT'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `PUT /api/notes/{id}/archive`
 
 *Archive a note*
@@ -619,6 +861,21 @@ This operation does not require authentication
 ```shell
 # You can also use wget
 curl -X PUT http://192.168.10.21:3000/api/notes/{id}/restore
+
+```
+
+```javascript
+
+fetch('http://192.168.10.21:3000/api/notes/{id}/restore',
+{
+  method: 'PUT'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -658,12 +915,32 @@ curl -X GET http://192.168.10.21:3000/api/routines/summary \
 
 ```
 
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/routines/summary',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `GET /api/routines/summary`
 
 *Get LLM-optimized routines summary*
 
 Returns routines with their associated tasks and notes.
-Optimized for LLM context (~800 chars for 5 routines).
+By default returns ALL items per routine. Use itemLimit to restrict.
 
 Use this endpoint to understand task/note organization.
 
@@ -672,7 +949,7 @@ Use this endpoint to understand task/note organization.
 |Name|In|Type|Required|Description|
 |---|---|---|---|---|
 |includeItems|query|boolean|false|Include tasks/notes per routine|
-|itemLimit|query|integer|false|Max tasks/notes per routine|
+|itemLimit|query|integer|false|Max tasks/notes per routine (default returns all)|
 
 > Example responses
 
@@ -737,6 +1014,26 @@ This operation does not require authentication
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/api/routines \
   -H 'Accept: application/json'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/routines',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -834,6 +1131,32 @@ curl -X POST http://192.168.10.21:3000/api/routines \
 
 ```
 
+```javascript
+const inputBody = '{
+  "title": "string",
+  "description": "string",
+  "color": "#3498db",
+  "icon": "📌",
+  "achievable": false
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/routines',
+{
+  method: 'POST',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `POST /api/routines`
 
 *Create a new routine*
@@ -882,6 +1205,26 @@ This operation does not require authentication
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/api/routines/archived \
   -H 'Accept: application/json'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/routines/archived',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -965,6 +1308,26 @@ curl -X GET http://192.168.10.21:3000/api/routines/{id} \
 
 ```
 
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/routines/{id}',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `GET /api/routines/{id}`
 
 *Get a single routine by ID*
@@ -1018,6 +1381,33 @@ This operation does not require authentication
 # You can also use wget
 curl -X PUT http://192.168.10.21:3000/api/routines/{id} \
   -H 'Content-Type: application/json'
+
+```
+
+```javascript
+const inputBody = '{
+  "title": "string",
+  "description": "string",
+  "color": "string",
+  "icon": "string",
+  "achievable": true,
+  "status": "active"
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/routines/{id}',
+{
+  method: 'PUT',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -1080,6 +1470,26 @@ This operation does not require authentication
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/api/routines/{id}/summary \
   -H 'Accept: application/json'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/routines/{id}/summary',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -1149,6 +1559,26 @@ This operation does not require authentication
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/api/routines/{id}/tasks \
   -H 'Accept: application/json'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/routines/{id}/tasks',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -1240,6 +1670,33 @@ curl -X PUT http://192.168.10.21:3000/api/routines/reorder \
 
 ```
 
+```javascript
+const inputBody = '{
+  "order": [
+    {
+      "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
+      "order": 0
+    }
+  ]
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/routines/reorder',
+{
+  method: 'PUT',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `PUT /api/routines/reorder`
 
 *Reorder routines*
@@ -1289,6 +1746,28 @@ curl -X PUT http://192.168.10.21:3000/api/routines/{id}/pause \
 
 ```
 
+```javascript
+const inputBody = '{
+  "pauseUntil": "2019-08-24T14:15:22Z"
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/routines/{id}/pause',
+{
+  method: 'PUT',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `PUT /api/routines/{id}/pause`
 
 *Pause a routine*
@@ -1332,6 +1811,21 @@ curl -X PUT http://192.168.10.21:3000/api/routines/{id}/complete
 
 ```
 
+```javascript
+
+fetch('http://192.168.10.21:3000/api/routines/{id}/complete',
+{
+  method: 'PUT'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `PUT /api/routines/{id}/complete`
 
 *Complete a routine*
@@ -1363,6 +1857,21 @@ This operation does not require authentication
 ```shell
 # You can also use wget
 curl -X PUT http://192.168.10.21:3000/api/routines/{id}/archive
+
+```
+
+```javascript
+
+fetch('http://192.168.10.21:3000/api/routines/{id}/archive',
+{
+  method: 'PUT'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -1399,6 +1908,21 @@ curl -X PUT http://192.168.10.21:3000/api/routines/{id}/restore
 
 ```
 
+```javascript
+
+fetch('http://192.168.10.21:3000/api/routines/{id}/restore',
+{
+  method: 'PUT'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `PUT /api/routines/{id}/restore`
 
 *Restore an archived routine*
@@ -1432,6 +1956,26 @@ This operation does not require authentication
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/api/search?q=string \
   -H 'Accept: application/json'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/search?q=string',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -1522,21 +2066,42 @@ curl -X GET http://192.168.10.21:3000/api/tasks/summary \
 
 ```
 
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/tasks/summary',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `GET /api/tasks/summary`
 
 *Get LLM-optimized tasks summary*
 
-Returns tasks grouped by column with minimal fields.
-Optimized for LLM context (~900 chars for 15-20 tasks).
+Returns tasks grouped by column with status and checklist items.
+By default returns ALL tasks. Use limit parameter to restrict results.
 
-Use this endpoint when you need a quick overview of all tasks
-without consuming excessive context tokens.
+Each task includes:
+- status: "pending", "completed", or "archived"
+- items: checklist items (only for list-type tasks with items)
 
 <h3 id="get__api_tasks_summary-parameters">Parameters</h3>
 
 |Name|In|Type|Required|Description|
 |---|---|---|---|---|
-|limit|query|integer|false|Max tasks per column|
+|limit|query|integer|false|Max tasks per column (default returns all)|
 |columns|query|string|false|Comma-separated column filter (e.g., "Today,Tomorrow")|
 |routine|query|string|false|Filter by routine name or ID|
 
@@ -1582,6 +2147,26 @@ This operation does not require authentication
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/api/tasks \
   -H 'Accept: application/json'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/tasks',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -1683,6 +2268,32 @@ curl -X POST http://192.168.10.21:3000/api/tasks \
 
 ```
 
+```javascript
+const inputBody = '{
+  "title": "string",
+  "notes": "string",
+  "routine_id": "f53c5ff7-cfb7-4f43-8b79-3421a01d8e2a",
+  "column_name": "today",
+  "due_date": "2019-08-24"
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/tasks',
+{
+  method: 'POST',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `POST /api/tasks`
 
 *Create a new task*
@@ -1742,6 +2353,21 @@ curl -X GET http://192.168.10.21:3000/api/tasks/archived
 
 ```
 
+```javascript
+
+fetch('http://192.168.10.21:3000/api/tasks/archived',
+{
+  method: 'GET'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `GET /api/tasks/archived`
 
 *Get all archived tasks*
@@ -1782,6 +2408,26 @@ This operation does not require authentication
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/api/tasks/{id} \
   -H 'Accept: application/json'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/tasks/{id}',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -1836,6 +2482,33 @@ This operation does not require authentication
 # You can also use wget
 curl -X PUT http://192.168.10.21:3000/api/tasks/{id} \
   -H 'Content-Type: application/json'
+
+```
+
+```javascript
+const inputBody = '{
+  "title": "string",
+  "notes": "string",
+  "routine_id": "f53c5ff7-cfb7-4f43-8b79-3421a01d8e2a",
+  "column_name": "today",
+  "position": 0,
+  "due_date": "2019-08-24"
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/tasks/{id}',
+{
+  method: 'PUT',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -1899,6 +2572,26 @@ This operation does not require authentication
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/api/tasks/{id}/context \
   -H 'Accept: application/json'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/tasks/{id}/context',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -1979,6 +2672,29 @@ curl -X PUT http://192.168.10.21:3000/api/tasks/{id}/move \
 
 ```
 
+```javascript
+const inputBody = '{
+  "column": "today",
+  "position": 0
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/tasks/{id}/move',
+{
+  method: 'PUT',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `PUT /api/tasks/{id}/move`
 
 *Move task to different column*
@@ -2032,6 +2748,21 @@ curl -X PUT http://192.168.10.21:3000/api/tasks/{id}/archive
 
 ```
 
+```javascript
+
+fetch('http://192.168.10.21:3000/api/tasks/{id}/archive',
+{
+  method: 'PUT'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `PUT /api/tasks/{id}/archive`
 
 *Archive a task*
@@ -2065,6 +2796,21 @@ curl -X PUT http://192.168.10.21:3000/api/tasks/{id}/restore
 
 ```
 
+```javascript
+
+fetch('http://192.168.10.21:3000/api/tasks/{id}/restore',
+{
+  method: 'PUT'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `PUT /api/tasks/{id}/restore`
 
 *Restore a task from archive*
@@ -2095,6 +2841,21 @@ This operation does not require authentication
 ```shell
 # You can also use wget
 curl -X POST http://192.168.10.21:3000/api/tasks/{id}/complete
+
+```
+
+```javascript
+
+fetch('http://192.168.10.21:3000/api/tasks/{id}/complete',
+{
+  method: 'POST'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -2133,6 +2894,21 @@ curl -X GET http://192.168.10.21:3000/api/tasks/{id}/items
 
 ```
 
+```javascript
+
+fetch('http://192.168.10.21:3000/api/tasks/{id}/items',
+{
+  method: 'GET'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `GET /api/tasks/{id}/items`
 
 *Get items for a task*
@@ -2163,6 +2939,28 @@ This operation does not require authentication
 # You can also use wget
 curl -X POST http://192.168.10.21:3000/api/tasks/{id}/items \
   -H 'Content-Type: application/json'
+
+```
+
+```javascript
+const inputBody = '{
+  "title": "string"
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/tasks/{id}/items',
+{
+  method: 'POST',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -2207,6 +3005,29 @@ This operation does not require authentication
 # You can also use wget
 curl -X PUT http://192.168.10.21:3000/api/tasks/{id}/items/{itemId} \
   -H 'Content-Type: application/json'
+
+```
+
+```javascript
+const inputBody = '{
+  "title": "string",
+  "completed": true
+}';
+const headers = {
+  'Content-Type':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/api/tasks/{id}/items/{itemId}',
+{
+  method: 'PUT',
+  body: inputBody,
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -2255,6 +3076,21 @@ curl -X DELETE http://192.168.10.21:3000/api/tasks/{id}/items/{itemId}
 
 ```
 
+```javascript
+
+fetch('http://192.168.10.21:3000/api/tasks/{id}/items/{itemId}',
+{
+  method: 'DELETE'
+
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
+
+```
+
 `DELETE /api/tasks/{id}/items/{itemId}`
 
 *Delete list item*
@@ -2289,6 +3125,26 @@ This operation does not require authentication
 # You can also use wget
 curl -X GET http://192.168.10.21:3000/health \
   -H 'Accept: application/json'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json'
+};
+
+fetch('http://192.168.10.21:3000/health',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 
@@ -2349,6 +3205,27 @@ This operation does not require authentication
 curl -X GET http://192.168.10.21:3000/api \
   -H 'Accept: application/json' \
   -H 'X-Agent-Key: API_KEY'
+
+```
+
+```javascript
+
+const headers = {
+  'Accept':'application/json',
+  'X-Agent-Key':'API_KEY'
+};
+
+fetch('http://192.168.10.21:3000/api',
+{
+  method: 'GET',
+
+  headers: headers
+})
+.then(function(res) {
+    return res.json();
+}).then(function(body) {
+    console.log(body);
+});
 
 ```
 

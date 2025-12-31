@@ -13,7 +13,7 @@ const validation = require('../middleware/validation');
  *     summary: Get LLM-optimized routines summary
  *     description: |
  *       Returns routines with their associated tasks and notes.
- *       Optimized for LLM context (~800 chars for 5 routines).
+ *       By default returns ALL items per routine. Use itemLimit to restrict.
  *
  *       Use this endpoint to understand task/note organization.
  *     tags: [Routines, LLM Summary]
@@ -28,8 +28,7 @@ const validation = require('../middleware/validation');
  *         name: itemLimit
  *         schema:
  *           type: integer
- *           default: 3
- *         description: Max tasks/notes per routine
+ *         description: Max tasks/notes per routine (default returns all)
  *     responses:
  *       200:
  *         description: Routines summary with contents
@@ -66,7 +65,7 @@ router.get('/summary', async (req, res, next) => {
   try {
     const options = {
       includeItems: req.query.includeItems !== 'false',
-      itemLimit: req.query.itemLimit ? parseInt(req.query.itemLimit) : 3
+      itemLimit: req.query.itemLimit ? parseInt(req.query.itemLimit) : null
     };
 
     const summary = await llmSummaryService.getRoutinesSummary(options);

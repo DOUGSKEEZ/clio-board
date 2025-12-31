@@ -29,7 +29,7 @@ class LLMSummaryService {
    * @returns {Object} Tasks summary
    */
   async getTasksSummary(options = {}) {
-    const { limit = 5, columns = null, routine = null } = options;
+    const { limit = null, columns = null, routine = null } = options;
 
     try {
       let query = `
@@ -39,6 +39,8 @@ class LLMSummaryService {
           t.column_name,
           t.due_date,
           t.position,
+          t.status,
+          t.type,
           r.title as routine_title
         FROM tasks t
         LEFT JOIN routines r ON t.routine_id = r.id
@@ -65,20 +67,52 @@ class LLMSummaryService {
       const result = await pool.query(query, values);
       const tasks = result.rows;
 
+      // Fetch list items for all list-type tasks
+      const listTaskIds = tasks.filter(t => t.type === 'list').map(t => t.id);
+      const itemsByTaskId = {};
+
+      if (listTaskIds.length > 0) {
+        const itemsResult = await pool.query(`
+          SELECT task_id, title, completed
+          FROM list_items
+          WHERE task_id = ANY($1::uuid[])
+          ORDER BY position
+        `, [listTaskIds]);
+
+        for (const item of itemsResult.rows) {
+          if (!itemsByTaskId[item.task_id]) {
+            itemsByTaskId[item.task_id] = [];
+          }
+          itemsByTaskId[item.task_id].push({
+            title: item.title,
+            completed: item.completed
+          });
+        }
+      }
+
       // Group by column
       const byColumn = {};
       const columnOrder = ['today', 'tomorrow', 'this_week', 'horizon'];
 
       for (const col of columnOrder) {
-        const colTasks = tasks
-          .filter(t => t.column_name === col)
-          .slice(0, limit)
-          .map(t => ({
-            id: t.id,
-            title: this.truncate(t.title, 60),
-            due: t.due_date ? t.due_date.toISOString().split('T')[0] : null,
-            routine: t.routine_title || null
-          }));
+        const filteredTasks = tasks.filter(t => t.column_name === col);
+        const colTasks = (limit ? filteredTasks.slice(0, limit) : filteredTasks)
+          .map(t => {
+            const task = {
+              id: t.id,
+              title: this.truncate(t.title, 60),
+              due: t.due_date ? t.due_date.toISOString().split('T')[0] : null,
+              routine: t.routine_title || null,
+              status: t.status
+            };
+
+            // Only include items array for list-type tasks that have items
+            if (itemsByTaskId[t.id] && itemsByTaskId[t.id].length > 0) {
+              task.items = itemsByTaskId[t.id];
+            }
+
+            return task;
+          });
 
         if (colTasks.length > 0) {
           // Convert column_name to display format
@@ -117,7 +151,7 @@ class LLMSummaryService {
    * @returns {Object} Notes summary
    */
   async getNotesSummary(options = {}) {
-    const { limit = 10, previewLength = 50, routine = null } = options;
+    const { limit = null, previewLength = 50, routine = null } = options;
 
     try {
       let query = `
@@ -141,8 +175,10 @@ class LLMSummaryService {
       }
 
       query += ' ORDER BY n.updated_at DESC';
-      query += ` LIMIT $${++paramCount}`;
-      values.push(limit);
+      if (limit) {
+        query += ` LIMIT $${++paramCount}`;
+        values.push(limit);
+      }
 
       const result = await pool.query(query, values);
 
@@ -172,7 +208,7 @@ class LLMSummaryService {
    * @returns {Object} Routines summary
    */
   async getRoutinesSummary(options = {}) {
-    const { includeItems = true, itemLimit = 3 } = options;
+    const { includeItems = true, itemLimit = null } = options;
 
     try {
       const routinesQuery = `
@@ -204,13 +240,18 @@ class LLMSummaryService {
 
         if (includeItems) {
           // Get tasks for this routine
-          const tasksResult = await pool.query(`
+          let tasksQuery = `
             SELECT id, title, column_name
             FROM tasks
             WHERE routine_id = $1 AND is_archived = false
             ORDER BY position
-            LIMIT $2
-          `, [routine.id, itemLimit]);
+          `;
+          const tasksParams = [routine.id];
+          if (itemLimit) {
+            tasksQuery += ' LIMIT $2';
+            tasksParams.push(itemLimit);
+          }
+          const tasksResult = await pool.query(tasksQuery, tasksParams);
 
           item.tasks = tasksResult.rows.map(t => ({
             id: t.id,
@@ -219,13 +260,18 @@ class LLMSummaryService {
           }));
 
           // Get notes for this routine
-          const notesResult = await pool.query(`
+          let notesQuery = `
             SELECT id, title
             FROM notes
             WHERE routine_id = $1 AND is_archived = false
             ORDER BY updated_at DESC
-            LIMIT $2
-          `, [routine.id, itemLimit]);
+          `;
+          const notesParams = [routine.id];
+          if (itemLimit) {
+            notesQuery += ' LIMIT $2';
+            notesParams.push(itemLimit);
+          }
+          const notesResult = await pool.query(notesQuery, notesParams);
 
           item.notes = notesResult.rows.map(n => ({
             id: n.id,

@@ -13,7 +13,7 @@ const validation = require('../middleware/validation');
  *     summary: Get LLM-optimized notes summary
  *     description: |
  *       Returns note titles with short previews.
- *       Optimized for LLM context (~700 chars for 10 notes).
+ *       By default returns ALL notes. Use limit parameter to restrict results.
  *
  *       Use this endpoint for a quick overview of notes.
  *     tags: [Notes, LLM Summary]
@@ -22,8 +22,7 @@ const validation = require('../middleware/validation');
  *         name: limit
  *         schema:
  *           type: integer
- *           default: 10
- *         description: Max notes returned
+ *         description: Max notes returned (default returns all)
  *       - in: query
  *         name: previewLength
  *         schema:
@@ -64,7 +63,7 @@ const validation = require('../middleware/validation');
 router.get('/summary', async (req, res, next) => {
   try {
     const options = {
-      limit: req.query.limit ? parseInt(req.query.limit) : 10,
+      limit: req.query.limit ? parseInt(req.query.limit) : null,
       previewLength: req.query.previewLength ? parseInt(req.query.previewLength) : 50,
       routine: req.query.routine || null
     };
