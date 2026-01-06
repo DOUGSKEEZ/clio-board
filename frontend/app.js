@@ -5718,7 +5718,8 @@ class ClioBoardApp {
         const noteMenuBtn = document.getElementById('edit-note-menu-btn');
         const noteMenu = document.getElementById('edit-note-menu');
         const archiveNoteBtn = document.getElementById('archive-note-from-modal-btn');
-        
+        const deleteNoteBtn = document.getElementById('delete-note-from-modal-btn');
+
         if (noteMenuBtn && noteMenu) {
             noteMenuBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -5739,7 +5740,14 @@ class ClioBoardApp {
                 await this.archiveNoteFromModal();
             });
         }
-        
+
+        if (deleteNoteBtn) {
+            deleteNoteBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await this.deleteNoteFromModal();
+            });
+        }
+
         // Handle ESC key - use document level for better capture
         const escHandler = (e) => {
             if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
@@ -5857,6 +5865,42 @@ class ClioBoardApp {
         } catch (error) {
             console.error('Error archiving note from modal:', error);
             this.showErrorNotification('Failed to archive note');
+        }
+    }
+
+    async deleteNoteFromModal() {
+        const noteId = document.getElementById('note-id').value;
+        if (!noteId) return;
+
+        // Confirm deletion
+        if (!confirm('Permanently delete this note? This cannot be undone.')) {
+            return;
+        }
+
+        try {
+            await this.apiCall(`/api/notes/${noteId}/explode`, {
+                method: 'POST'
+            });
+
+            // Close the modal
+            document.getElementById('note-modal').classList.add('hidden');
+            document.getElementById('note-form').reset();
+
+            // Refresh notes view
+            await this.loadNotesView();
+
+            // If we're in a routine modal context, reload routine notes too
+            if (this.currentRoutine) {
+                const notes = await this.apiCall(`/api/notes?routine_id=${this.currentRoutine.id}`);
+                const filteredNotes = notes.filter(n => n.routine_id === this.currentRoutine.id);
+                this.renderRoutineNotes(filteredNotes);
+            }
+
+            this.showSuccessNotification('Note deleted');
+            console.log('💥 Note exploded from modal');
+        } catch (error) {
+            console.error('Error deleting note from modal:', error);
+            this.showErrorNotification('Failed to delete note');
         }
     }
     

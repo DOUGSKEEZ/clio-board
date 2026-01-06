@@ -5,6 +5,7 @@ const llmSummaryService = require('../services/llmSummaryService');
 const { createAuditMiddleware } = require('../middleware/auditLog');
 const { logger } = require('../middleware/logger');
 const validation = require('../middleware/validation');
+const { notifyRAGIndex } = require('../services/ragNotifier');
 
 /**
  * @swagger
@@ -304,7 +305,11 @@ router.post('/',
 
       // Audit log
       await req.audit(note.id, null, note);
-      
+
+      // RAG notification - get full note with relationships
+      const fullNote = await noteService.getNoteById(note.id);
+      notifyRAGIndex(fullNote, 'note', 'upsert');
+
       res.status(201).json(note);
     } catch (error) {
       next(error);
@@ -366,10 +371,14 @@ router.put('/:id',
       }
 
       const updatedNote = await noteService.updateNote(noteId, req.body);
-      
+
       // Audit log
       await req.audit(noteId, originalNote, updatedNote);
-      
+
+      // RAG notification - get full note with relationships
+      const fullNote = await noteService.getNoteById(noteId);
+      notifyRAGIndex(fullNote, 'note', 'upsert');
+
       res.json(updatedNote);
     } catch (error) {
       next(error);
@@ -427,10 +436,14 @@ router.put('/:id/move',
       }
 
       const movedNote = await noteService.moveNote(noteId, column, position);
-      
+
       // Audit log
       await req.audit(noteId, originalNote, movedNote);
-      
+
+      // RAG notification - get full note with relationships
+      const fullNote = await noteService.getNoteById(noteId);
+      notifyRAGIndex(fullNote, 'note', 'upsert');
+
       res.json(movedNote);
     } catch (error) {
       next(error);
@@ -485,10 +498,14 @@ router.post('/:id/convert',
       const taskData = req.body;
       
       const result = await noteService.convertToTask(noteId, taskData);
-      
+
       // Audit log for both note and task
       await req.audit(noteId, { converted: false }, { converted: true, task_id: result.task.id });
-      
+
+      // RAG notification - archive the note, index the new task
+      notifyRAGIndex(result.archivedNote, 'note', 'archive');
+      // Task notification will be handled by taskService when called from noteService
+
       res.status(201).json(result);
     } catch (error) {
       if (error.message === 'Note not found') {
@@ -531,10 +548,13 @@ router.put('/:id/archive',
       }
 
       const archivedNote = await noteService.archiveNote(noteId);
-      
+
       // Audit log
       await req.audit(noteId, originalNote, archivedNote);
-      
+
+      // RAG notification - use originalNote which has relationships
+      notifyRAGIndex(originalNote, 'note', 'archive');
+
       res.json(archivedNote);
     } catch (error) {
       next(error);
@@ -574,11 +594,43 @@ router.put('/:id/restore',
       }
 
       const restoredNote = await noteService.restoreNote(noteId);
-      
+
       // Audit log
       await req.audit(noteId, originalNote, restoredNote);
-      
+
+      // RAG notification - get full note with relationships
+      const fullNote = await noteService.getNoteById(noteId);
+      notifyRAGIndex(fullNote, 'note', 'unarchive');
+
       res.json(restoredNote);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// 💥 SECRET ENDPOINT - Not documented, not for CLio
+// For Doug to clean up CLio's mistakes
+router.post('/:id/explode',
+  createAuditMiddleware('explode_note', 'note'),
+  async (req, res, next) => {
+    try {
+      const noteId = req.params.id;
+
+      const note = await noteService.getNoteById(noteId);
+      if (!note) {
+        return res.status(404).json({ error: 'Note not found' });
+      }
+
+      await noteService.deleteNote(noteId);
+
+      // Audit log
+      await req.audit(noteId, note, null);
+
+      // RAG notification - remove from vector store
+      notifyRAGIndex({ id: noteId }, 'note', 'delete');
+
+      res.json({ exploded: true, id: noteId, title: note.title });
     } catch (error) {
       next(error);
     }

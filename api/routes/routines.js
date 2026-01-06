@@ -5,6 +5,7 @@ const llmSummaryService = require('../services/llmSummaryService');
 const { createAuditMiddleware } = require('../middleware/auditLog');
 const { logger } = require('../middleware/logger');
 const validation = require('../middleware/validation');
+const { notifyRAGIndex } = require('../services/ragNotifier');
 
 /**
  * @swagger
@@ -331,7 +332,10 @@ router.post('/',
 
       // Audit log
       await req.audit(routine.id, null, routine);
-      
+
+      // RAG notification
+      notifyRAGIndex(routine, 'routine', 'upsert');
+
       res.status(201).json(routine);
     } catch (error) {
       next(error);
@@ -443,10 +447,14 @@ router.put('/:id',
       }
 
       const updatedRoutine = await routineService.updateRoutine(routineId, req.body);
-      
+
       // Audit log
       await req.audit(routineId, originalRoutine, updatedRoutine);
-      
+
+      // RAG notification
+      const fullRoutine = await routineService.getRoutineById(routineId);
+      notifyRAGIndex(fullRoutine, 'routine', 'upsert');
+
       res.json(updatedRoutine);
     } catch (error) {
       next(error);
@@ -497,10 +505,14 @@ router.put('/:id/pause',
       }
 
       const pausedRoutine = await routineService.pauseRoutine(routineId, pauseUntil);
-      
+
       // Audit log
       await req.audit(routineId, originalRoutine, pausedRoutine);
-      
+
+      // RAG notification
+      const fullRoutine = await routineService.getRoutineById(routineId);
+      notifyRAGIndex(fullRoutine, 'routine', 'upsert');
+
       res.json(pausedRoutine);
     } catch (error) {
       next(error);
@@ -542,10 +554,14 @@ router.put('/:id/complete',
       }
 
       const completedRoutine = await routineService.completeRoutine(routineId);
-      
+
       // Audit log
       await req.audit(routineId, originalRoutine, completedRoutine);
-      
+
+      // RAG notification
+      const fullRoutine = await routineService.getRoutineById(routineId);
+      notifyRAGIndex(fullRoutine, 'routine', 'upsert');
+
       res.json(completedRoutine);
     } catch (error) {
       if (error.message === 'Routine is not marked as achievable') {
@@ -588,10 +604,13 @@ router.put('/:id/archive',
       }
 
       const archivedRoutine = await routineService.archiveRoutine(routineId);
-      
+
       // Audit log
       await req.audit(routineId, originalRoutine, archivedRoutine);
-      
+
+      // RAG notification - use originalRoutine
+      notifyRAGIndex(originalRoutine, 'routine', 'archive');
+
       res.json(archivedRoutine);
     } catch (error) {
       next(error);
@@ -631,10 +650,14 @@ router.put('/:id/restore',
       }
 
       const restoredRoutine = await routineService.restoreRoutine(routineId);
-      
+
       // Audit log
       await req.audit(routineId, originalRoutine, restoredRoutine);
-      
+
+      // RAG notification
+      const fullRoutine = await routineService.getRoutineById(routineId);
+      notifyRAGIndex(fullRoutine, 'routine', 'unarchive');
+
       res.json(restoredRoutine);
     } catch (error) {
       next(error);

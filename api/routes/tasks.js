@@ -5,6 +5,7 @@ const llmSummaryService = require('../services/llmSummaryService');
 const { createAuditMiddleware } = require('../middleware/auditLog');
 const { logger } = require('../middleware/logger');
 const validation = require('../middleware/validation');
+const { notifyRAGIndex } = require('../services/ragNotifier');
 
 /**
  * @swagger
@@ -322,7 +323,11 @@ router.post('/',
 
       // Audit log
       await req.audit(task.id, null, task);
-      
+
+      // RAG notification - get full task with relationships
+      const fullTask = await taskService.getTaskById(task.id);
+      notifyRAGIndex(fullTask, 'task', 'upsert');
+
       res.status(201).json(task);
     } catch (error) {
       next(error);
@@ -385,10 +390,14 @@ router.put('/:id',
       }
 
       const updatedTask = await taskService.updateTask(taskId, req.body);
-      
+
       // Audit log
       await req.audit(taskId, originalTask, updatedTask);
-      
+
+      // RAG notification - get full task with relationships
+      const fullTask = await taskService.getTaskById(taskId);
+      notifyRAGIndex(fullTask, 'task', 'upsert');
+
       res.json(updatedTask);
     } catch (error) {
       next(error);
@@ -446,10 +455,14 @@ router.put('/:id/move',
       }
 
       const movedTask = await taskService.moveTask(taskId, column, position);
-      
+
       // Audit log
       await req.audit(taskId, originalTask, movedTask);
-      
+
+      // RAG notification - get full task with relationships
+      const fullTask = await taskService.getTaskById(taskId);
+      notifyRAGIndex(fullTask, 'task', 'upsert');
+
       res.json(movedTask);
     } catch (error) {
       next(error);
@@ -489,10 +502,13 @@ router.put('/:id/archive',
       }
 
       const archivedTask = await taskService.archiveTask(taskId);
-      
+
       // Audit log
       await req.audit(taskId, originalTask, archivedTask);
-      
+
+      // RAG notification - use originalTask which has relationships
+      notifyRAGIndex(originalTask, 'task', 'archive');
+
       res.json(archivedTask);
     } catch (error) {
       next(error);
@@ -529,10 +545,14 @@ router.put('/:id/restore',
       // Don't check if task exists first since getTaskById only finds active tasks
       // The restoreTask method will handle task not found errors
       const restoredTask = await taskService.restoreTask(taskId);
-      
+
       // Audit log (use restored task as both original and new for audit)
       await req.audit(taskId, restoredTask, restoredTask);
-      
+
+      // RAG notification - get full task with relationships
+      const fullTask = await taskService.getTaskById(taskId);
+      notifyRAGIndex(fullTask, 'task', 'unarchive');
+
       res.json(restoredTask);
     } catch (error) {
       next(error);
@@ -572,10 +592,14 @@ router.post('/:id/complete',
       }
 
       const completedTask = await taskService.completeTask(taskId);
-      
+
       // Audit log
       await req.audit(taskId, originalTask, completedTask);
-      
+
+      // RAG notification - get full task with relationships
+      const fullTask = await taskService.getTaskById(taskId);
+      notifyRAGIndex(fullTask, 'task', 'upsert');
+
       res.json(completedTask);
     } catch (error) {
       next(error);
@@ -655,10 +679,14 @@ router.post('/:id/items',
 
       const taskId = req.params.id;
       const item = await taskService.addItemToTask(taskId, { title });
-      
+
       // Audit log
       await req.audit(item.id, null, item);
-      
+
+      // RAG notification - re-index parent task with updated items
+      const fullTask = await taskService.getTaskById(taskId);
+      notifyRAGIndex(fullTask, 'task', 'upsert');
+
       res.status(201).json(item);
     } catch (error) {
       next(error);
@@ -708,14 +736,18 @@ router.put('/:id/items/:itemId',
       const { id: taskId, itemId } = req.params;
       
       const updatedItem = await taskService.updateItem(taskId, itemId, req.body);
-      
+
       if (!updatedItem) {
         return res.status(404).json({ error: 'Item not found' });
       }
-      
+
       // Audit log
       await req.audit(itemId, null, updatedItem);
-      
+
+      // RAG notification - re-index parent task with updated items
+      const fullTask = await taskService.getTaskById(taskId);
+      notifyRAGIndex(fullTask, 'task', 'upsert');
+
       res.json(updatedItem);
     } catch (error) {
       next(error);
@@ -756,14 +788,18 @@ router.delete('/:id/items/:itemId',
       const { id: taskId, itemId } = req.params;
       
       const success = await taskService.deleteItem(taskId, itemId);
-      
+
       if (!success) {
         return res.status(404).json({ error: 'Item not found' });
       }
-      
+
       // Audit log
       await req.audit(itemId, { deleted: true }, null);
-      
+
+      // RAG notification - re-index parent task with updated items
+      const fullTask = await taskService.getTaskById(taskId);
+      notifyRAGIndex(fullTask, 'task', 'upsert');
+
       res.status(204).send();
     } catch (error) {
       next(error);
